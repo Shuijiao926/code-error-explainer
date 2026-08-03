@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "抽 ReportBody 组件复用渲染逻辑，避免详情/卡片双份代码"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "删 /api/detect、加 status 筛选均跨前后端，需核对契约一致性"}
+{"file": ".trellis/spec/backend/ai-triage.md", "reason": "双段式报告契约与复制诊断包格式，ReportBody 需对齐"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "status 筛选走 MP 条件构造，遵守既有查询约定"}

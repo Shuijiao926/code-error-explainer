@@ -39,4 +39,17 @@
 ## 技术栈识别
 
 - `TechStackDetector` 规则表：类名前缀 → 框架标签；无命中 → `["通用/未知"]`。
-- 用户传入 `techStack` 时**以用户值为准**，并覆盖 `handoff.techStack` 保持一致。
+- **V1.2 起完全后台化**：前端无技术栈输入项，`ExplainRequest` 无 `techStack` 字段，已删除 `/api/detect`。
+  识别结果仅作为输出展示（结果卡片/历史标签）。
+
+## V1.2 交互约定
+
+- **极简输入**：粘贴堆栈 → 点生成，无任何前置选择。
+- **报告渲染复用**：双段式正文抽成 `frontend/src/components/ReportBody.tsx`，主页卡片与历史详情抽屉共用，
+  复制诊断包逻辑只维护一份。
+- **历史详情**：历史列表「详情」→ 嵌套 Drawer，展示完整报告 + 诊断回填记录（就地追加）。
+- **状态筛选**：`GET /api/history?status=all|pending|diagnosed`，前端 Segmented 三段。
+  - `pending` → `wrapper.isNull(finalDiagnosis)`；`diagnosed` → `wrapper.isNotNull(...)`。
+- **新手引导**：空状态「试试示例堆栈」；生成中提示"5-30 秒"；非堆栈软提示（正则
+  `/(Exception|Error|Caused by|^\s*at\s)/m` 不命中时警告，不阻断）。
+- **测试隔离**：H2 内存库在测试类内共享，集成测试用 `@BeforeEach clearAll()` 保证计数断言独立。
