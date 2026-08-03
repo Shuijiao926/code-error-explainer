@@ -2,18 +2,19 @@ import { useEffect, useState } from 'react'
 import {
   App as AntdApp,
   Button,
+  Divider,
   Drawer,
   Empty,
   Input,
   List,
-  Modal,
   Pagination,
   Popconfirm,
+  Segmented,
   Space,
   Tag,
   Typography,
 } from 'antd'
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EyeOutlined } from '@ant-design/icons'
 import {
   backfillDiagnosis,
   clearHistoryAll,
@@ -21,7 +22,9 @@ import {
   fetchHistoryDetail,
   removeHistory,
 } from '../services/api'
-import type { DiagnosisEntry, ExplainResponse, HistoryItem, PreTriageReport } from '../types'
+import type { HistoryStatus } from '../services/api'
+import ReportBody from './ReportBody'
+import type { DiagnosisEntry, HistoryItem, PreTriageReport } from '../types'
 
 interface Props {
   open: boolean
@@ -30,24 +33,34 @@ interface Props {
 
 const PAGE_SIZE = 10
 
+interface DetailState {
+  id: number
+  errorType: string
+  techStack: string[]
+  createdAt: string
+  report: PreTriageReport
+  entries: DiagnosisEntry[]
+}
+
 export default function HistoryDrawer({ open, onClose }: Props) {
   const { message } = AntdApp.useApp()
   const [records, setRecords] = useState<HistoryItem[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [keyword, setKeyword] = useState('')
+  const [status, setStatus] = useState<HistoryStatus>('all')
   const [loading, setLoading] = useState(false)
 
-  // 回填弹窗状态
-  const [backfillItem, setBackfillItem] = useState<HistoryItem | null>(null)
-  const [backfillRecords, setBackfillRecords] = useState<DiagnosisEntry[]>([])
-  const [backfillText, setBackfillText] = useState('')
-  const [backfillSubmitting, setBackfillSubmitting] = useState(false)
+  // 详情抽屉状态
+  const [detail, setDetail] = useState<DetailState | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [appendText, setAppendText] = useState('')
+  const [appending, setAppending] = useState(false)
 
-  const load = async (p = page, kw = keyword) => {
+  const load = async (p = page, kw = keyword, st = status) => {
     setLoading(true)
     try {
-      const res = await fetchHistory({ page: p, size: PAGE_SIZE, keyword: kw || undefined })
+      const res = await fetchHistory({ page: p, size: PAGE_SIZE, keyword: kw || undefined, status: st })
       setRecords(res.records)
       setTotal(res.total)
     } catch (e) {
@@ -61,7 +74,8 @@ export default function HistoryDrawer({ open, onClose }: Props) {
     if (open) {
       setPage(1)
       setKeyword('')
-      load(1, '')
+      setStatus('all')
+      load(1, '', 'all')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -72,71 +86,63 @@ export default function HistoryDrawer({ open, onClose }: Props) {
     load(1, value)
   }
 
-  const onView = async (id: number) => {
+  const openDetail = async (item: HistoryItem) => {
+    setDetailLoading(true)
+    setDetail(null)
     try {
-      const detail = await fetchHistoryDetail(id)
+      const d = await fetchHistoryDetail(item.id)
       let report: PreTriageReport | null = null
       try {
-        report = JSON.parse(detail.preReport || detail.explanation)
+        report = JSON.parse(d.preReport || d.explanation)
       } catch {
         report = null
       }
-      const full: ExplainResponse = {
-        id: detail.id,
-        errorType: detail.errorType,
-        techStack: detail.techStack
-          ? detail.techStack.split(',').map((s) => s.trim()).filter(Boolean)
-          : [],
-        summary: detail.summary,
-        createdAt: detail.createdAt,
-        report:
-          report ?? {
-            personReport: { summary: detail.summary, layer: '', misuse: '', nextStep: '' },
-            handoff: { techStack: [], suspectedPoints: [], checkList: [], rawError: detail.stackTrace },
-          },
-      }
-      onClose()
-      window.dispatchEvent(new CustomEvent('history:view', { detail: full }))
-    } catch (e) {
-      message.error((e as Error).message)
-    }
-  }
-
-  const openBackfill = async (item: HistoryItem) => {
-    try {
-      const detail = await fetchHistoryDetail(item.id)
       let entries: DiagnosisEntry[] = []
       try {
-        entries = detail.finalDiagnosis ? JSON.parse(detail.finalDiagnosis) : []
+        entries = d.finalDiagnosis ? JSON.parse(d.finalDiagnosis) : []
       } catch {
         entries = []
       }
-      setBackfillItem(item)
-      setBackfillRecords(entries)
-      setBackfillText('')
+      setDetail({
+        id: d.id,
+        errorType: d.errorType,
+        techStack: d.techStack
+          ? d.techStack.split(',').map((s) => s.trim()).filter(Boolean)
+          : [],
+        createdAt: d.createdAt,
+        report:
+          report ?? {
+            personReport: { summary: d.summary, layer: '', misuse: '', nextStep: '' },
+            handoff: { techStack: [], suspectedPoints: [], checkList: [], rawError: d.stackTrace },
+          },
+        entries,
+      })
+      setAppendText('')
     } catch (e) {
       message.error((e as Error).message)
+    } finally {
+      setDetailLoading(false)
     }
   }
 
-  const submitBackfill = async () => {
-    const text = backfillText.trim()
+  const submitAppend = async () => {
+    const text = appendText.trim()
     if (!text) {
       message.warning('请填写诊断内容')
       return
     }
-    if (!backfillItem) return
-    setBackfillSubmitting(true)
+    if (!detail) return
+    setAppending(true)
     try {
-      const updated = await backfillDiagnosis(backfillItem.id, text)
-      setBackfillRecords(updated)
-      setBackfillText('')
+      const updated = await backfillDiagnosis(detail.id, text)
+      setDetail((prev) => (prev ? { ...prev, entries: updated } : prev))
+      setAppendText('')
       message.success('已追加诊断记录')
       load(page, keyword)
     } catch (e) {
       message.error((e as Error).message)
     } finally {
-      setBackfillSubmitting(false)
+      setAppending(false)
     }
   }
 
@@ -144,6 +150,7 @@ export default function HistoryDrawer({ open, onClose }: Props) {
     try {
       await removeHistory(id)
       message.success('已删除')
+      if (detail?.id === id) setDetail(null)
       load(page, keyword)
     } catch (e) {
       message.error((e as Error).message)
@@ -156,6 +163,7 @@ export default function HistoryDrawer({ open, onClose }: Props) {
       message.success('已清空全部历史')
       setRecords([])
       setTotal(0)
+      setDetail(null)
     } catch (e) {
       message.error((e as Error).message)
     }
@@ -167,7 +175,7 @@ export default function HistoryDrawer({ open, onClose }: Props) {
   return (
     <Drawer
       title="📋 历史记录"
-      width={440}
+      width={460}
       open={open}
       onClose={onClose}
       extra={
@@ -179,6 +187,21 @@ export default function HistoryDrawer({ open, onClose }: Props) {
       }
     >
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Segmented
+          block
+          value={status}
+          onChange={(v) => {
+            const st = v as HistoryStatus
+            setStatus(st)
+            setPage(1)
+            load(1, keyword, st)
+          }}
+          options={[
+            { label: '全部', value: 'all' },
+            { label: '待回填', value: 'pending' },
+            { label: '已诊断', value: 'diagnosed' },
+          ]}
+        />
         <Input.Search placeholder="搜索异常类型 / 概要 / 技术栈" allowClear onSearch={onSearch} />
 
         {records.length === 0 && !loading ? (
@@ -191,12 +214,12 @@ export default function HistoryDrawer({ open, onClose }: Props) {
               <List.Item
                 actions={[
                   <Button
-                    key="bf"
+                    key="view"
                     size="small"
-                    icon={<EditOutlined />}
-                    onClick={() => openBackfill(item)}
+                    icon={<EyeOutlined />}
+                    onClick={() => openDetail(item)}
                   >
-                    回填
+                    详情
                   </Button>,
                   <Popconfirm
                     key="del"
@@ -212,7 +235,7 @@ export default function HistoryDrawer({ open, onClose }: Props) {
                 <List.Item.Meta
                   title={
                     <Space>
-                      <Typography.Link onClick={() => onView(item.id)}>{item.errorType}</Typography.Link>
+                      <Typography.Text strong>{item.errorType}</Typography.Text>
                       {item.finalDiagnosis ? (
                         <Tag color="green">已诊断</Tag>
                       ) : (
@@ -258,39 +281,68 @@ export default function HistoryDrawer({ open, onClose }: Props) {
         )}
       </Space>
 
-      {/* 回填项目 AI 诊断弹窗 */}
-      <Modal
-        title={`🤝 回填项目 AI 诊断 · ${backfillItem?.errorType ?? ''}`}
-        open={backfillItem !== null}
-        onCancel={() => setBackfillItem(null)}
-        onOk={submitBackfill}
-        okText="追加"
-        cancelText="取消"
-        confirmLoading={backfillSubmitting}
+      {/* 详情抽屉（嵌套在历史抽屉之上） */}
+      <Drawer
+        title={`🔍 ${detail?.errorType ?? '历史详情'}`}
+        width={420}
+        open={detail !== null}
+        onClose={() => setDetail(null)}
       >
-        <Typography.Text type="secondary">已有诊断记录：</Typography.Text>
-        <List
-          size="small"
-          style={{ marginTop: 4 }}
-          locale={{ emptyText: '暂无诊断记录' }}
-          dataSource={backfillRecords}
-          renderItem={(r) => (
-            <List.Item style={{ padding: '6px 0' }}>
-              <Typography.Text type="secondary" style={{ fontSize: 12, marginRight: 8, flexShrink: 0 }}>
-                [{r.ts}]
+        {detailLoading || !detail ? (
+          <Empty description="加载中…" />
+        ) : (
+          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <div>
+              {detail.techStack.map((s, i) => (
+                <Tag key={i} color="blue" style={{ marginRight: 4, marginBottom: 4 }}>
+                  {s}
+                </Tag>
+              ))}
+              <Typography.Text type="secondary" style={{ fontSize: 12, marginLeft: 4 }}>
+                {detail.createdAt}
               </Typography.Text>
-              <span style={{ fontSize: 13 }}>{r.content}</span>
-            </List.Item>
-          )}
-        />
-        <Input.TextArea
-          rows={4}
-          placeholder="粘贴项目 AI 给出的最终诊断结论…"
-          value={backfillText}
-          onChange={(e) => setBackfillText(e.target.value)}
-          style={{ marginTop: 12 }}
-        />
-      </Modal>
+            </div>
+
+            <ReportBody
+              person={detail.report.personReport}
+              handoff={detail.report.handoff}
+            />
+
+            <Divider />
+            <Typography.Title level={5}>🤝 项目 AI 诊断记录</Typography.Title>
+            {detail.entries.length === 0 ? (
+              <Typography.Text type="secondary">暂无回填，粘贴项目 AI 的结论到下方。</Typography.Text>
+            ) : (
+              <List
+                size="small"
+                dataSource={detail.entries}
+                renderItem={(r) => (
+                  <List.Item style={{ padding: '6px 0', alignItems: 'flex-start' }}>
+                    <Typography.Text type="secondary" style={{ fontSize: 12, marginRight: 8, flexShrink: 0 }}>
+                      [{r.ts}]
+                    </Typography.Text>
+                    <span style={{ fontSize: 13 }}>{r.content}</span>
+                  </List.Item>
+                )}
+              />
+            )}
+            <Input.TextArea
+              rows={3}
+              placeholder="粘贴项目 AI 给出的最终诊断结论…"
+              value={appendText}
+              onChange={(e) => setAppendText(e.target.value)}
+            />
+            <Button
+              type="primary"
+              loading={appending}
+              onClick={submitAppend}
+              style={{ alignSelf: 'flex-end' }}
+            >
+              追加诊断
+            </Button>
+          </Space>
+        )}
+      </Drawer>
     </Drawer>
   )
 }

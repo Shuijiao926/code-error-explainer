@@ -18,7 +18,6 @@ function ensureOk<T>(data: ApiResponse<T>): T {
 
 export interface ExplainRequest {
   stackTrace: string
-  techStack?: string[]
 }
 
 export async function explainStack(req: ExplainRequest): Promise<ExplainResponse> {
@@ -26,16 +25,13 @@ export async function explainStack(req: ExplainRequest): Promise<ExplainResponse
   return ensureOk(data)
 }
 
-/** 技术栈自动识别（预填选择器用，不调用 AI） */
-export async function detectStack(stackTrace: string): Promise<string[]> {
-  const { data } = await api.post<ApiResponse<string[]>>('/detect', { stackTrace })
-  return ensureOk(data)
-}
+export type HistoryStatus = 'all' | 'pending' | 'diagnosed'
 
 export async function fetchHistory(params: {
   page: number
   size: number
   keyword?: string
+  status?: HistoryStatus
 }): Promise<PageResult<HistoryItem>> {
   const { data } = await api.get<ApiResponse<PageResult<HistoryItem>>>('/history', { params })
   return ensureOk(data)
