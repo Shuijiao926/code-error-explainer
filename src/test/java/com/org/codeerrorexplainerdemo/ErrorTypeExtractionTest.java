@@ -4,6 +4,7 @@ import com.org.codeerrorexplainerdemo.service.ErrorExplainService;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ErrorTypeExtractionTest {
 
@@ -37,5 +38,28 @@ class ErrorTypeExtractionTest {
     @Test
     void returnsUnknownForNull() {
         assertEquals("Unknown", ErrorExplainService.extractErrorType(null));
+    }
+
+    @Test
+    void extractsPythonValueError() {
+        String s = "Traceback (most recent call last):\n"
+                + "  File \"app.py\", line 3, in <module>\n"
+                + "    x = int('abc')\n"
+                + "ValueError: invalid literal for int() with base 10: 'abc'";
+        assertEquals("ValueError", ErrorExplainService.extractErrorType(s));
+    }
+
+    @Test
+    void extractsNodeTypeError() {
+        String s = "TypeError: Cannot read properties of undefined (reading 'name')\n"
+                + "    at Object.<anonymous> (/app/main.js:8:5)";
+        assertEquals("TypeError", ErrorExplainService.extractErrorType(s));
+    }
+
+    @Test
+    void extractsGoPanic() {
+        String s = "panic: runtime error: index out of range [3] with capacity 2\n\n"
+                + "goroutine 1 [running]:\nmain.main()\n\t/workspace/main.go:20";
+        assertTrue(ErrorExplainService.extractErrorType(s).contains("index out of range"));
     }
 }

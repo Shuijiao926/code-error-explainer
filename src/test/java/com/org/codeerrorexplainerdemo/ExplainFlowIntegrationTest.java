@@ -98,6 +98,19 @@ class ExplainFlowIntegrationTest {
     }
 
     @Test
+    void pythonStack_detectsLanguageAndGeneratesTriage() {
+        ExplainResponse resp = explainService.explain(
+                "Traceback (most recent call last):\n"
+                        + "  File \"app.py\", line 3, in <module>\n"
+                        + "    x = int('abc')\n"
+                        + "ValueError: invalid literal for int() with base 10: 'abc'");
+        assertThat(resp.getLanguage()).isEqualTo("python");
+        assertThat(resp.getErrorType()).isEqualTo("ValueError");
+        assertThat(resp.getReport().getPersonReport().getSummary()).isNotBlank();
+        assertThat(resp.getReport().getHandoff().getRawError()).contains("Traceback");
+    }
+
+    @Test
     void statusFilter_pendingAndDiagnosed() {
         explainService.explain("java.lang.OutOfMemoryError: Java heap space");
         Long diagnosedId = explainService.explain("java.lang.NullPointerException").getId();

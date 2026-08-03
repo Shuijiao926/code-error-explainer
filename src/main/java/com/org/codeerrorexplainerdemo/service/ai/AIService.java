@@ -13,8 +13,9 @@ public interface AIService {
      * 前置分诊：把堆栈转成双段式报告（人话版 + 项目AI诊断包）。
      *
      * @param stackTrace 原始异常堆栈
-     * @param techStack  已识别的技术栈（用户修正后）
+     * @param techStack  已识别的技术栈
+     * @param language   堆栈语言（java/python/node/go/unknown）
      * @return 前置分诊报告
      */
-    PreTriageReport explain(String stackTrace, List<String> techStack);
+    PreTriageReport explain(String stackTrace, List<String> techStack, String language);
 }

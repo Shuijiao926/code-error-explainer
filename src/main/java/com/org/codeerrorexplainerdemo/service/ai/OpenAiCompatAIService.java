@@ -22,37 +22,45 @@ import java.util.Map;
 @Slf4j
 public class OpenAiCompatAIService implements AIService {
 
-    private static final String SYSTEM_PROMPT = """
-            你是一位资深的 Java 后端「分诊」专家。用户会粘贴一段 Java 异常堆栈。
-            你的职责是前置分诊：帮用户（包括非 IT 人员）看懂这个报错，并产出一份能让
-            「项目里的 AI」据此做最终诊断的结构化线索。
+    private String systemPrompt(String language) {
+        String role = switch (language == null ? "" : language) {
+            case "python" -> "资深的 Python 开发与调试专家";
+            case "node" -> "资深的 Node.js/JavaScript 开发与调试专家";
+            case "go" -> "资深的 Go 开发与调试专家";
+            default -> "资深的 Java 后端开发与调试专家";
+        };
+        return """
+                你是一位%s。用户会粘贴一段异常堆栈。
+                你的职责是前置分诊：帮用户（包括非 IT 人员）看懂这个报错，并产出一份能让
+                「项目里的 AI」据此做最终诊断的结构化线索。
 
-            你没有项目代码上下文，因此必须遵守：
-            - 只给出方向和可疑点，绝不断言"确定根因"
-            - 明确指出哪些信息缺失、需要结合仓库上下文确认
+                你没有项目代码上下文，因此必须遵守：
+                - 只给出方向和可疑点，绝不断言"确定根因"
+                - 明确指出哪些信息缺失、需要结合仓库上下文确认
 
-            请严格按以下 JSON 格式返回（不要包含 markdown 代码块标记）：
-            {
-              "personReport": {
-                "summary": "用一句大白话说明这是什么问题，非 IT 也能看懂",
-                "layer": "出在哪一层（业务代码/框架/基础设施），用普通人能懂的语言解释",
-                "misuse": "疑似的技术使用不妥，用大白话描述，并说明这是方向而非定论",
-                "nextStep": "你现在可以怎么做（引导用户把诊断包复制发给项目 AI）"
-              },
-              "handoff": {
-                "techStack": ["已识别到的技术栈"],
-                "suspectedPoints": ["给项目 AI 的技术向疑似点"],
-                "checkList": ["需要项目 AI 结合仓库上下文查证的事项"]
-              }
-            }
+                请严格按以下 JSON 格式返回（不要包含 markdown 代码块标记）：
+                {
+                  "personReport": {
+                    "summary": "用一句大白话说明这是什么问题，非 IT 也能看懂",
+                    "layer": "出在哪一层（业务代码/框架/基础设施），用普通人能懂的语言解释",
+                    "misuse": "疑似的技术使用不妥，用大白话描述，并说明这是方向而非定论",
+                    "nextStep": "你现在可以怎么做（引导用户把诊断包复制发给项目 AI）"
+                  },
+                  "handoff": {
+                    "techStack": ["已识别到的技术栈"],
+                    "suspectedPoints": ["给项目 AI 的技术向疑似点"],
+                    "checkList": ["需要项目 AI 结合仓库上下文查证的事项"]
+                  }
+                }
 
-            要求：
-            - personReport 面向非 IT：优先用生活化类比把技术概念讲成日常事情
-              （如空指针 = "想用还没准备好的对象，像借东西东西还没到位"），
-              避免术语，实在要用就先解释
-            - handoff 面向项目 AI：精确、可操作
-            - 如果堆栈信息不完整，在 checkList 里明确指出还缺什么信息
-            """;
+                要求：
+                - personReport 面向非 IT：优先用生活化类比把技术概念讲成日常事情
+                  （如空指针 = "想用还没准备好的对象，像借东西东西还没到位"），
+                  避免术语，实在要用就先解释
+                - handoff 面向项目 AI：精确、可操作
+                - 如果堆栈信息不完整，在 checkList 里明确指出还缺什么信息
+                """.formatted(role);
+    }
 
     private final AiProperties props;
     private final ObjectMapper objectMapper;
@@ -71,14 +79,17 @@ public class OpenAiCompatAIService implements AIService {
     }
 
     @Override
-    public PreTriageReport explain(String stackTrace, List<String> techStack) {
+    public PreTriageReport explain(String stackTrace, List<String> techStack, String language) {
         String techStackHint = techStack == null || techStack.isEmpty() ? "未识别" : String.join(", ", techStack);
-        String userContent = "已识别的技术栈：" + techStackHint + "\n\n原始异常堆栈：\n" + stackTrace;
+        String lang = language == null || language.isBlank() ? "未知" : language;
+        String userContent = "语言：" + lang
+                + "\n已识别的技术栈：" + techStackHint
+                + "\n\n原始异常堆栈：\n" + stackTrace;
         Map<String, Object> body = Map.of(
                 "model", props.getModel(),
                 "temperature", 0.3,
                 "messages", List.of(
-                        Map.of("role", "system", "content", SYSTEM_PROMPT),
+                        Map.of("role", "system", "content", systemPrompt(language)),
                         Map.of("role", "user", "content", userContent)
                 )
         );

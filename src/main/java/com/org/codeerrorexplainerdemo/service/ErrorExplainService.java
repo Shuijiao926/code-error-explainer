@@ -36,10 +36,11 @@ public class ErrorExplainService {
             throw new BusinessException("堆栈信息不能为空");
         }
 
-        String errorType = extractErrorType(stackTrace);
+        String language = LanguageDetector.detect(stackTrace);
+        String errorType = extractErrorType(stackTrace, language);
         List<String> techStack = TechStackDetector.detect(stackTrace);
 
-        PreTriageReport report = aiService.explain(stackTrace, techStack);
+        PreTriageReport report = aiService.explain(stackTrace, techStack, language);
         // 保证 handoff 与最终技术栈/原始堆栈一致
         if (report.getHandoff() == null) {
             report.setHandoff(Handoff.builder().build());
@@ -61,6 +62,7 @@ public class ErrorExplainService {
 
         ErrorHistory history = new ErrorHistory();
         history.setErrorType(errorType);
+        history.setLanguage(language);
         history.setTechStack(String.join(", ", techStack));
         history.setStackTrace(stackTrace);
         history.setPreReport(preReportJson);
@@ -69,10 +71,11 @@ public class ErrorExplainService {
         history.setSummary(truncate(summary == null || summary.isBlank() ? errorType : summary, SUMMARY_MAX));
         historyMapper.insert(history);
 
-        log.info("pre-triage done: id={}, type={}, stack={}", history.getId(), errorType, techStack);
+        log.info("pre-triage done: id={}, lang={}, type={}, stack={}", history.getId(), language, errorType, techStack);
         return ExplainResponse.builder()
                 .id(history.getId())
                 .errorType(errorType)
+                .language(language)
                 .techStack(techStack)
                 .summary(history.getSummary())
                 .report(report)
@@ -81,16 +84,60 @@ public class ErrorExplainService {
     }
 
     /**
-     * 从堆栈中提取异常类型（简单类名），无匹配返回 Unknown。
+     * 从堆栈中提取异常类型（自动识别语言后按语言规则提取），无匹配返回 Unknown。
      */
     public static String extractErrorType(String stackTrace) {
+        return extractErrorType(stackTrace, LanguageDetector.detect(stackTrace));
+    }
+
+    public static String extractErrorType(String stackTrace, String language) {
         if (stackTrace == null) {
             return "Unknown";
         }
+        if ("python".equals(language)) {
+            return extractPythonError(stackTrace);
+        }
+        if ("node".equals(language)) {
+            return extractNodeError(stackTrace);
+        }
+        if ("go".equals(language)) {
+            return extractGoError(stackTrace);
+        }
+        return extractJavaError(stackTrace);
+    }
+
+    private static String extractJavaError(String stackTrace) {
         Matcher matcher = ERROR_PATTERN.matcher(stackTrace);
         if (matcher.find()) {
             String full = matcher.group(1);
             return full.substring(full.lastIndexOf('.') + 1);
+        }
+        return "Unknown";
+    }
+
+    /** Python：取最后一个 `XXXError/XXXException: msg` 行的异常名 */
+    private static String extractPythonError(String stackTrace) {
+        Matcher matcher = Pattern.compile("(?m)^(\\w+(?:Error|Exception)):").matcher(stackTrace);
+        String found = "Unknown";
+        while (matcher.find()) {
+            found = matcher.group(1);
+        }
+        return found;
+    }
+
+    /** Node：取首个错误名（TypeError/ReferenceError 等） */
+    private static String extractNodeError(String stackTrace) {
+        Matcher matcher = Pattern.compile("\\b(TypeError|ReferenceError|RangeError|SyntaxError|URIError|Error):")
+                .matcher(stackTrace);
+        return matcher.find() ? matcher.group(1) : "Unknown";
+    }
+
+    /** Go：取 panic 信息第一段（截断） */
+    private static String extractGoError(String stackTrace) {
+        Matcher matcher = Pattern.compile("panic: (.+)").matcher(stackTrace);
+        if (matcher.find()) {
+            String msg = matcher.group(1).trim();
+            return msg.length() > 60 ? msg.substring(0, 60) : msg;
         }
         return "Unknown";
     }

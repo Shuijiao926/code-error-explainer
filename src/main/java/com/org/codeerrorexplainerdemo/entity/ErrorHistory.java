@@ -20,6 +20,9 @@ public class ErrorHistory {
     /** 异常类型，如 NullPointerException */
     private String errorType;
 
+    /** 堆栈语言：java/python/node/go */
+    private String language;
+
     /** 识别到的技术栈，逗号分隔 */
     private String techStack;
 

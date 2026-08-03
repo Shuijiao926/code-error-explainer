@@ -22,6 +22,9 @@ public class ExplainResponse {
     /** 异常类型，如 NullPointerException */
     private String errorType;
 
+    /** 堆栈语言：java/python/node/go */
+    private String language;
+
     /** 技术栈（识别或用户修正后的最终值） */
     private List<String> techStack;
 

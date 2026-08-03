@@ -1,7 +1,8 @@
--- H2 内存库测试表结构（与 sql/init.sql 的 error_history 对应）
+-- H2 内存库测试表结构（与 sql/init.sql 对应）
 CREATE TABLE IF NOT EXISTS error_history (
   id               BIGINT       AUTO_INCREMENT PRIMARY KEY,
   error_type       VARCHAR(100) NOT NULL,
+  language         VARCHAR(20),
   tech_stack       VARCHAR(255),
   stack_trace      CLOB         NOT NULL,
   explanation      CLOB         NOT NULL,
@@ -11,3 +12,21 @@ CREATE TABLE IF NOT EXISTS error_history (
   source_ip        VARCHAR(50),
   created_at       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS error_template (
+  id           BIGINT       AUTO_INCREMENT PRIMARY KEY,
+  error_type   VARCHAR(100) NOT NULL UNIQUE,
+  category     VARCHAR(50),
+  cause_top3   CLOB,
+  fix_template CLOB,
+  hierarchy    VARCHAR(500),
+  created_at   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+  updated_at   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 知识卡片测试种子（先清空保证幂等）
+DELETE FROM error_template;
+INSERT INTO error_template (error_type, category, cause_top3, fix_template, hierarchy) VALUES
+('NullPointerException', '空指针', '["注入未生效","查询返回null未判空","字段未初始化"]', '1. 判空\n2. 检查注入', 'Exception → RuntimeException → NullPointerException'),
+('SQLException', 'SQL', '["连接池耗尽","SQL语法错","约束冲突"]', '1. 看SQLSTATE', 'Exception → SQLException');
+
