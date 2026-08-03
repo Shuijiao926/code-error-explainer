@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "V1.1 跨 前端/后端/DB/AI 多层，改造契约时需过跨层检查清单"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "技术栈识别/报告 DTO/回填等会复用 V1.0 模式，防重复造轮子"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "含 V1.0 沉淀的 SB4+MP4 选型与 H2 测试模式，DB 迁移需遵循"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "含统一 Result/AI 兜底模式，V1.1 沿用"}
+{"file": ".trellis/tasks/08-03-v1-initial-implementation/research/mybatis-plus-boot4-compat.md", "reason": "SB4+MyBatis-Plus 兼容性结论，涉及新表/迁移时再核对"}

@@ -79,3 +79,26 @@ Questions to answer:
 
 - 列表接口不要 SELECT 大字段（stack_trace/explanation 是 TEXT），用 `wrapper.select(...)` 只取轻量列。
 - `historyMapper.delete(null)` 会删除全表，用作「清空」接口。
+
+---
+
+## V1.1 实现经验（2026-08-03 沉淀）
+
+### 幂等迁移模式（MySQL）
+
+- MySQL 8 的 `ADD COLUMN` 不支持 `IF NOT EXISTS`，幂等迁移用「存储过程 + INFORMATION_SCHEMA 检查」实现，
+  见 `sql/migrate-v11.sql`（可重复执行，列已存在自动跳过）。
+- 增量加列，不要动已有 NOT NULL 约束的旧列；新列一律可空。
+
+### 追加式诊断回填
+
+- 「项目 AI 最终诊断」支持多条追加：`final_diagnosis` 列存 JSON 数组
+  `[{"ts":"yyyy-MM-dd HH:mm:ss","content":"…"}]`；空 = NULL（未诊断）。
+- 追加用 readValue(TypeReference<List>) 解析 → add → writeValueAsString → updateById，不要手拼 JSON。
+- 列表 select 需包含 `final_diagnosis`（判断「已诊断/待回填」状态），但它是 TEXT，记录量上来后可考虑拆表。
+
+### 技术栈识别
+
+- 服务端规则表（类名前缀 → 框架标签）见 `service/TechStackDetector.java`；前端通过 `POST /api/detect`
+  预填选择器，**不要在前后端重复实现识别逻辑**。
+- 规则注意优先级：`org.springframework.boot` 必须先于 `org.springframework`（命中 Boot 不再标 Spring）。
