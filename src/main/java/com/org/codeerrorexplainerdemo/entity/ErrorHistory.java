@@ -20,11 +20,20 @@ public class ErrorHistory {
     /** 异常类型，如 NullPointerException */
     private String errorType;
 
+    /** 识别到的技术栈，逗号分隔 */
+    private String techStack;
+
     /** 原始堆栈（用户输入的） */
     private String stackTrace;
 
-    /** AI 返回的完整解释 (JSON) */
+    /** AI 返回的完整解释 (JSON)，V1.0 遗留字段 */
     private String explanation;
+
+    /** 前置分诊报告 JSON（V1.1） */
+    private String preReport;
+
+    /** 项目AI回填的最终诊断（V1.1） */
+    private String finalDiagnosis;
 
     /** 一句话概要，列表展示用 */
     private String summary;

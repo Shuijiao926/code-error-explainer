@@ -1,7 +1,9 @@
 package com.org.codeerrorexplainerdemo.service.ai;
 
 import com.org.codeerrorexplainerdemo.config.AiProperties;
-import com.org.codeerrorexplainerdemo.dto.Explanation;
+import com.org.codeerrorexplainerdemo.dto.Handoff;
+import com.org.codeerrorexplainerdemo.dto.PersonReport;
+import com.org.codeerrorexplainerdemo.dto.PreTriageReport;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -15,28 +17,41 @@ import java.util.Map;
 
 /**
  * OpenAI 兼容聊天接口实现（DeepSeek / OpenAI / Ollama 等均可走此通道）。
- * 通过 REST 直连 /chat/completions，不依赖重型 AI SDK。
+ * 按「分诊专家」角色输出双段式前置分诊报告。
  */
 @Slf4j
 public class OpenAiCompatAIService implements AIService {
 
     private static final String SYSTEM_PROMPT = """
-            你是一个资深的 Java 后端开发专家和调试高手。用户会粘贴一段 Java 异常堆栈信息，
-            请你用通俗易懂的中文解释这个错误。
+            你是一位资深的 Java 后端「分诊」专家。用户会粘贴一段 Java 异常堆栈。
+            你的职责是前置分诊：帮用户（包括非 IT 人员）看懂这个报错，并产出一份能让
+            「项目里的 AI」据此做最终诊断的结构化线索。
+
+            你没有项目代码上下文，因此必须遵守：
+            - 只给出方向和可疑点，绝不断言"确定根因"
+            - 明确指出哪些信息缺失、需要结合仓库上下文确认
 
             请严格按以下 JSON 格式返回（不要包含 markdown 代码块标记）：
             {
-              "overview": "用一句话说清楚这是什么错误",
-              "location": "异常发生在哪个文件、哪个方法、第几行",
-              "rootCause": "根因分析，技术层面解释为什么会发生",
-              "fixSteps": ["步骤1", "步骤2", "步骤3"],
-              "prevention": "如何从代码层面预防同类问题"
+              "personReport": {
+                "summary": "用一句大白话说明这是什么问题，非 IT 也能看懂",
+                "layer": "出在哪一层（业务代码/框架/基础设施），用普通人能懂的语言解释",
+                "misuse": "疑似的技术使用不妥，用大白话描述，并说明这是方向而非定论",
+                "nextStep": "你现在可以怎么做（引导用户把诊断包复制发给项目 AI）"
+              },
+              "handoff": {
+                "techStack": ["已识别到的技术栈"],
+                "suspectedPoints": ["给项目 AI 的技术向疑似点"],
+                "checkList": ["需要项目 AI 结合仓库上下文查证的事项"]
+              }
             }
 
             要求：
-            - 语言通俗，避免过于学术化
-            - 修复步骤具体可操作
-            - 如果堆栈信息不完整，明确指出还需要什么信息
+            - personReport 面向非 IT：优先用生活化类比把技术概念讲成日常事情
+              （如空指针 = "想用还没准备好的对象，像借东西东西还没到位"），
+              避免术语，实在要用就先解释
+            - handoff 面向项目 AI：精确、可操作
+            - 如果堆栈信息不完整，在 checkList 里明确指出还缺什么信息
             """;
 
     private final AiProperties props;
@@ -56,13 +71,15 @@ public class OpenAiCompatAIService implements AIService {
     }
 
     @Override
-    public Explanation explain(String stackTrace) {
+    public PreTriageReport explain(String stackTrace, List<String> techStack) {
+        String techStackHint = techStack == null || techStack.isEmpty() ? "未识别" : String.join(", ", techStack);
+        String userContent = "已识别的技术栈：" + techStackHint + "\n\n原始异常堆栈：\n" + stackTrace;
         Map<String, Object> body = Map.of(
                 "model", props.getModel(),
                 "temperature", 0.3,
                 "messages", List.of(
                         Map.of("role", "system", "content", SYSTEM_PROMPT),
-                        Map.of("role", "user", "content", stackTrace)
+                        Map.of("role", "user", "content", userContent)
                 )
         );
         try {
@@ -81,31 +98,48 @@ public class OpenAiCompatAIService implements AIService {
             if (content.isBlank()) {
                 throw new IllegalStateException("AI 未返回解释内容");
             }
-            return parseExplanation(content);
+            return finalizeReport(parseReport(content), stackTrace, techStack);
         } catch (Exception e) {
-            log.warn("AI 调用失败，返回兜底解释：{}", e.getMessage());
-            return fallback(stackTrace);
+            log.warn("AI 调用失败，返回兜底分诊：{}", e.getMessage());
+            return fallback(stackTrace, techStack);
         }
     }
 
-    /** 解析 AI 返回的 JSON（剥离可能存在的 markdown 围栏） */
-    private Explanation parseExplanation(String content) throws Exception {
+    /** 解析 AI 返回的 JSON（剥离可能存在的 markdown 围栏），并统一覆盖技术栈与原始堆栈 */
+    private PreTriageReport parseReport(String content) throws Exception {
         String text = content.trim();
         if (text.startsWith("```")) {
             text = text.replaceFirst("^```[a-zA-Z]*\\s*", "").replaceFirst("```\\s*$", "").trim();
         }
-        return objectMapper.readValue(text, Explanation.class);
+        return objectMapper.readValue(text, PreTriageReport.class);
     }
 
-    /** AI 不可用时的兜底解释：用户不白屏，仍可入库 */
-    private Explanation fallback(String stackTrace) {
+    /** 保证 handoff 中的技术栈与原始堆栈始终与最终值一致 */
+    private PreTriageReport finalizeReport(PreTriageReport report, String stackTrace, List<String> techStack) {
+        if (report.getHandoff() == null) {
+            report.setHandoff(Handoff.builder().build());
+        }
+        report.getHandoff().setTechStack(techStack);
+        report.getHandoff().setRawError(stackTrace);
+        return report;
+    }
+
+    /** AI 不可用时的兜底分诊：用户不白屏，仍可入库 */
+    private PreTriageReport fallback(String stackTrace, List<String> techStack) {
         String firstLine = stackTrace == null ? "未知异常" : stackTrace.lines().findFirst().orElse("未知异常");
-        return Explanation.builder()
-                .overview(firstLine)
-                .location("无法定位（AI 服务暂不可用）")
-                .rootCause("AI 服务调用失败，请检查 ai.api-key 配置是否有效")
-                .fixSteps(List.of("检查 AI_API_KEY 环境变量或 application.yaml 中 ai.api-key", "确认网络可访问 " + props.getBaseUrl(), "稍后重试"))
-                .prevention("配置好 AI 服务后即可获得真实分析")
+        return PreTriageReport.builder()
+                .personReport(PersonReport.builder()
+                        .summary(firstLine)
+                        .layer("无法定位（AI 服务暂不可用）")
+                        .misuse("AI 服务调用失败，疑似配置问题（方向，待确认）")
+                        .nextStep("检查 AI_API_KEY 配置后重试，或将报错直接发给项目 AI")
+                        .build())
+                .handoff(Handoff.builder()
+                        .techStack(techStack)
+                        .suspectedPoints(List.of("AI 服务调用失败，请检查 ai.api-key / base-url"))
+                        .checkList(List.of("确认 API Key 是否有效", "确认网络可访问 " + props.getBaseUrl()))
+                        .rawError(stackTrace)
+                        .build())
                 .build();
     }
 }

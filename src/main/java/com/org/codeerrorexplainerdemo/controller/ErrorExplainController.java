@@ -1,13 +1,20 @@
 package com.org.codeerrorexplainerdemo.controller;
 
+import com.org.codeerrorexplainerdemo.common.BusinessException;
 import com.org.codeerrorexplainerdemo.common.Result;
+import com.org.codeerrorexplainerdemo.dto.DiagnosisEntry;
+import com.org.codeerrorexplainerdemo.dto.DiagnosisRequest;
 import com.org.codeerrorexplainerdemo.dto.ExplainRequest;
 import com.org.codeerrorexplainerdemo.dto.ExplainResponse;
 import com.org.codeerrorexplainerdemo.dto.PageResult;
 import com.org.codeerrorexplainerdemo.entity.ErrorHistory;
 import com.org.codeerrorexplainerdemo.service.ErrorExplainService;
 import com.org.codeerrorexplainerdemo.service.HistoryService;
+import com.org.codeerrorexplainerdemo.service.TechStackDetector;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.PutMapping;
+
+import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,7 +37,16 @@ public class ErrorExplainController {
 
     @PostMapping("/explain")
     public Result<ExplainResponse> explain(@RequestBody ExplainRequest request) {
-        return Result.ok(explainService.explain(request.getStackTrace()));
+        return Result.ok(explainService.explain(request.getStackTrace(), request.getTechStack()));
+    }
+
+    /** 技术栈自动识别（前端预填选择器用），不调用 AI */
+    @PostMapping("/detect")
+    public Result<List<String>> detect(@RequestBody ExplainRequest request) {
+        if (request.getStackTrace() == null || request.getStackTrace().isBlank()) {
+            throw new BusinessException("堆栈信息不能为空");
+        }
+        return Result.ok(TechStackDetector.detect(request.getStackTrace()));
     }
 
     @GetMapping("/history")
@@ -55,6 +71,13 @@ public class ErrorExplainController {
     public Result<Void> clearHistory() {
         historyService.clearAll();
         return Result.ok();
+    }
+
+    /** 回填/追加项目 AI 的最终诊断（多条保留） */
+    @PutMapping("/history/{id}/diagnosis")
+    public Result<List<DiagnosisEntry>> backfillDiagnosis(@PathVariable Long id,
+                                                          @RequestBody DiagnosisRequest request) {
+        return Result.ok(historyService.saveDiagnosis(id, request.getDiagnosis()));
     }
 
     @GetMapping("/health")

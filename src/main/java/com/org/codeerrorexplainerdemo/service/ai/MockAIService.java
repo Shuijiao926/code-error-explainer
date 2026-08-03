@@ -1,130 +1,148 @@
 package com.org.codeerrorexplainerdemo.service.ai;
 
-import com.org.codeerrorexplainerdemo.dto.Explanation;
+import com.org.codeerrorexplainerdemo.dto.Handoff;
+import com.org.codeerrorexplainerdemo.dto.PersonReport;
+import com.org.codeerrorexplainerdemo.dto.PreTriageReport;
 
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Mock 提供者：未配置 API Key 时启用，按异常类型返回模板化解释，
- * 保证无 Key 也能端到端演示主链路。仅用于演示，非真实分析。
+ * Mock 提供者：未配置 API Key 时启用，按异常类型返回模板化双段式分诊报告
+ * （人话版采用「类比优先」风格）。仅用于演示，非真实分析。
  */
 public class MockAIService implements AIService {
 
     private static final Pattern ERROR_PATTERN = Pattern.compile("([\\w.]+(?:Exception|Error))");
 
     @Override
-    public Explanation explain(String stackTrace) {
+    public PreTriageReport explain(String stackTrace, List<String> techStack) {
         String type = extractType(stackTrace);
-        return explainForType(type, stackTrace);
+        return buildForType(type, stackTrace, techStack);
     }
 
-    private Explanation explainForType(String type, String stackTrace) {
+    private PreTriageReport buildForType(String type, String stackTrace, List<String> techStack) {
         String t = type == null ? "" : type;
-        if (t.contains("NullPointerException")) return npe(type);
-        if (t.contains("SQLException")) return sql(type);
-        if (t.contains("Timeout") || t.contains("timeout")) return timeout(type);
-        if (t.contains("OutOfMemory")) return oom(type);
-        if (t.contains("StackOverflow")) return stackOverflow(type);
-        if (t.contains("ClassCast")) return classCast(type);
-        return generic(type);
+        if (t.contains("NullPointerException")) return npe(type, stackTrace, techStack);
+        if (t.contains("SQLException")) return sql(type, stackTrace, techStack);
+        if (t.contains("Timeout") || t.contains("timeout")) return timeout(type, stackTrace, techStack);
+        if (t.contains("OutOfMemory")) return oom(type, stackTrace, techStack);
+        if (t.contains("StackOverflow")) return stackOverflow(type, stackTrace, techStack);
+        return generic(type, stackTrace, techStack);
     }
 
-    private Explanation npe(String type) {
-        return Explanation.builder()
-                .overview("这是一个空指针异常（" + type + "）：代码调用了某个为 null 的对象的方法或属性。")
-                .location("堆栈中第一个 \"at ...\" 行是真正出问题的位置，通常是最内层业务代码。")
-                .rootCause("某个对象在调用前为 null，常见于依赖未注入、查询结果为空未判空、字段未初始化。")
-                .fixSteps(List.of(
-                        "定位堆栈中第一个属于自己业务的 \"at xxx\" 行",
-                        "检查该行调用对象是否为 null，例如 userRepository 是否被注入",
-                        "对可能为空的返回值（如 findById）做判空或 orElse 兜底",
-                        "必要时用 Optional 或 Objects.requireNonNull 明确前置条件"))
-                .prevention("用构造函数注入代替字段注入；对可能为 null 的返回值统一判空；在关键路径加断言。")
+    private PreTriageReport npe(String type, String stack, List<String> techStack) {
+        return PreTriageReport.builder()
+                .personReport(PersonReport.builder()
+                        .summary("程序想用「还没准备好的对象」，就像你要借东西、可东西还没到位——这叫空指针（" + type + "）。")
+                        .layer("出在你业务代码里：堆栈第一个 \"at ...\" 行就是实际出错的地方，比如登录这一步。")
+                        .misuse("这个对象本该由框架或程序提前「送到位」，但看起来没送到——就像盒子该装的零件没装进去。这是方向，不是定论。")
+                        .nextStep("把「诊断包」发给项目 AI，让它去仓库查一查：零件是不是没装进盒子（对象有没有被注入/初始化）。")
+                        .build())
+                .handoff(Handoff.builder()
+                        .techStack(techStack)
+                        .suspectedPoints(List.of("依赖注入可能未生效（@Service/@Autowired 或包扫描范围）",
+                                "查询结果可能为 null 但未判空（findById/返回值链式调用）"))
+                        .checkList(List.of("定位第一个属于业务代码的 \"at\" 行",
+                                "检查该行调用对象是否被正确注入/初始化",
+                                "检查该字段是否有单测覆盖"))
+                        .rawError(stack)
+                        .build())
                 .build();
     }
 
-    private Explanation sql(String type) {
-        return Explanation.builder()
-                .overview("这是一个 SQL 相关异常（" + type + "），通常是连接、语法或约束层面的问题。")
-                .location("看堆栈中 MyBatis/JDBC 相关的调用层，定位到具体 DAO/Mapper 方法。")
-                .rootCause("常见于连接池耗尽、SQL 语法错误、唯一键冲突、事务超时、死锁。")
-                .fixSteps(List.of(
-                        "查看错误消息中的 SQLSTATE 编号定位具体原因",
-                        "检查 Mapper XML / 注解 SQL 的语法与表结构是否一致",
-                        "确认数据库连接池配置（最大连接数）是否过小",
-                        "若是死锁，检查事务中加锁顺序是否一致"))
-                .prevention("为慢 SQL 建索引；事务尽量短小；连接池参数按并发量配置并监控。")
+    private PreTriageReport sql(String type, String stack, List<String> techStack) {
+        return PreTriageReport.builder()
+                .personReport(PersonReport.builder()
+                        .summary("你的程序在跟数据库「约事情」时没约成，卡住了（" + type + "）。")
+                        .layer("出在数据访问这一层：程序去找数据库要数据的地方。")
+                        .misuse("可能是「打电话占线没人接」（连接池满）、「说的方言数据库听不懂」（SQL 写法不对）、或「撞了重复的名字」（唯一约束冲突）。这是方向，不是定论。")
+                        .nextStep("把「诊断包」发给项目 AI，让它结合你的 Mapper/SQL 和库表结构确认是哪种。")
+                        .build())
+                .handoff(Handoff.builder()
+                        .techStack(techStack)
+                        .suspectedPoints(List.of("连接池耗尽（最大连接数过小）", "SQL 语法或表结构不匹配", "唯一约束冲突"))
+                        .checkList(List.of("核对错误消息中的 SQLSTATE/具体 SQL",
+                                "检查连接池配置与当前并发量",
+                                "核对 Mapper 与表结构是否一致"))
+                        .rawError(stack)
+                        .build())
                 .build();
     }
 
-    private Explanation timeout(String type) {
-        return Explanation.builder()
-                .overview("这是一个超时异常（" + type + "）：某个外部调用或任务在限定时间内没有完成。")
-                .location("堆栈中的 HTTP 客户端 / RPC 调用 / 线程池等待处，即超时点。")
-                .rootCause("被调用的服务或方法响应过慢，超过配置的超时阈值，常见于慢 SQL、下游接口变慢、线程池排队。")
-                .fixSteps(List.of(
-                        "确认超时发生在哪个调用链（数据库 / HTTP / RPC / 线程池）",
-                        "检查下游服务或慢 SQL 是否出现性能瓶颈",
-                        "评估是否需要调大超时阈值或加熔断降级",
-                        "排查线程池是否被耗尽导致任务排队"))
-                .prevention("为外部调用统一设置超时与重试；对慢接口做性能压测；关键路径加熔断。")
+    private PreTriageReport timeout(String type, String stack, List<String> techStack) {
+        return PreTriageReport.builder()
+                .personReport(PersonReport.builder()
+                        .summary("你的程序等一个「慢动作」等太久了，超时放弃（" + type + "）。")
+                        .layer("出在等外部资源的地方：数据库、HTTP 接口、或线程池排队。")
+                        .misuse("很可能是被等的「人」太慢、你给的时间太短、或排队的人太多。这是方向，不是定论。")
+                        .nextStep("把「诊断包」发给项目 AI，让它结合调用配置和链路排查是哪一步慢。")
+                        .build())
+                .handoff(Handoff.builder()
+                        .techStack(techStack)
+                        .suspectedPoints(List.of("下游服务/慢 SQL 响应超时", "超时阈值配置过短", "线程池耗尽排队"))
+                        .checkList(List.of("定位超时发生在哪一跳（DB/HTTP/线程池）",
+                                "检查下游是否有性能瓶颈",
+                                "检查连接池/线程池参数"))
+                        .rawError(stack)
+                        .build())
                 .build();
     }
 
-    private Explanation oom(String type) {
-        return Explanation.builder()
-                .overview("这是一个内存溢出错误（" + type + "）：JVM 堆内存耗尽，无法再分配对象。")
-                .location("结合堆栈与 GC 日志定位是哪个模块在疯狂创建对象。")
-                .rootCause("常见于大集合未释放、内存泄漏（如全局缓存无限增长）、一次性加载过多数据、堆内存配置过小。")
-                .fixSteps(List.of(
-                        "用 jmap / MAT 分析堆转储，定位内存占用大户",
-                        "检查是否有集合/缓存无限增长未清理",
-                        "对大结果集改用分批或流式处理",
-                        "按实际负载调整 -Xmx 堆内存大小"))
-                .prevention("对缓存设置上限与过期；大数据量分页处理；上线前做压测观察内存曲线。")
+    private PreTriageReport oom(String type, String stack, List<String> techStack) {
+        return PreTriageReport.builder()
+                .personReport(PersonReport.builder()
+                        .summary("程序的内存「仓库」装满了，再也放不进东西（" + type + "）。")
+                        .layer("出在 JVM 内存管理这一层，要看是哪个模块一直在往里堆东西。")
+                        .misuse("常见是「仓库只进不出」（缓存/集合无限增长）、一次搬太多、或内存泄漏。这是方向，不是定论。")
+                        .nextStep("把「诊断包」发给项目 AI；方便的话把 jmap 堆转储也一起给它。")
+                        .build())
+                .handoff(Handoff.builder()
+                        .techStack(techStack)
+                        .suspectedPoints(List.of("大集合/缓存无限增长未清理", "一次性加载过大数据集", "内存泄漏"))
+                        .checkList(List.of("用 jmap/MAT 分析堆转储定位占用大户",
+                                "检查是否有集合/缓存无限增长",
+                                "评估 -Xmx 是否过小"))
+                        .rawError(stack)
+                        .build())
                 .build();
     }
 
-    private Explanation stackOverflow(String type) {
-        return Explanation.builder()
-                .overview("这是一个栈溢出错误（" + type + "）：方法调用层级过深，通常是死循环递归。")
-                .location("堆栈中重复出现同一个方法多次，即为递归入口。")
-                .rootCause("递归没有正确的终止条件，或对象间循环调用（A 调 B、B 又调 A）。")
-                .fixSteps(List.of(
-                        "在堆栈中找重复出现的类名/方法名",
-                        "检查递归函数是否有明确的终止条件",
-                        "排查对象初始化或 toString/equals 等是否互相调用",
-                        "深层递归改用迭代 + 显式栈实现"))
-                .prevention("递归前先想好终止条件；对循环引用做防护（如用标识避免重复访问）。")
+    private PreTriageReport stackOverflow(String type, String stack, List<String> techStack) {
+        return PreTriageReport.builder()
+                .personReport(PersonReport.builder()
+                        .summary("程序自己一层层「套娃」套太深，把栈挤爆了（" + type + "）。")
+                        .layer("出在方法调用链上：堆栈里同一个方法反复出现，就是套娃入口。")
+                        .misuse("很可能是套娃没有停止条件（递归缺终止），或对象之间互相叫没完没了。这是方向，不是定论。")
+                        .nextStep("把「诊断包」发给项目 AI，让它结合你的递归/循环引用代码确认。")
+                        .build())
+                .handoff(Handoff.builder()
+                        .techStack(techStack)
+                        .suspectedPoints(List.of("递归缺少终止条件", "对象间循环引用（A 调 B、B 又调 A）"))
+                        .checkList(List.of("在堆栈中找重复出现的类名/方法名",
+                                "检查递归终止条件",
+                                "检查 toString/equals/初始化是否互相调用"))
+                        .rawError(stack)
+                        .build())
                 .build();
     }
 
-    private Explanation classCast(String type) {
-        return Explanation.builder()
-                .overview("这是一个类型转换异常（" + type + "）：把一个对象强制转换成它实际不是的类型。")
-                .location("堆栈中类型转换的 \"at\" 行即出错处。")
-                .rootCause("对象实际类型与强转目标不匹配，常见于反序列化类型不对、泛型擦除、错误的多态分支。")
-                .fixSteps(List.of(
-                        "确认被强转对象的实际类型（调试或打印 getClass()）",
-                        "检查反序列化 / JSON 解析处的目标类型声明",
-                        "强转前用 instanceof 或 Class.isInstance 做类型检查",
-                        "修正泛型声明，避免裸类型"))
-                .prevention("统一入口做类型校验；避免裸泛型；对不确定类型先判断再转换。")
-                .build();
-    }
-
-    private Explanation generic(String type) {
-        return Explanation.builder()
-                .overview("检测到异常类型：" + type + "（当前为演示模式的通用解释，配置真实 AI Key 后可获得专业分析）。")
-                .location("堆栈中第一个 \"at ...\" 行即出错点。")
-                .rootCause("具体根因需结合堆栈上下文分析。")
-                .fixSteps(List.of(
-                        "查看异常消息与最内层堆栈定位出错代码",
-                        "结合报错处代码与传入数据排查",
-                        "配置 AI_API_KEY 后重新提交以获得精确解释"))
-                .prevention("保持代码可观测性（日志/监控），异常发生时能快速定位。")
+    private PreTriageReport generic(String type, String stack, List<String> techStack) {
+        return PreTriageReport.builder()
+                .personReport(PersonReport.builder()
+                        .summary("检测到异常类型：" + type + "。（当前为演示模式，配置真实 AI Key 后会获得专业分诊。）")
+                        .layer("具体层面需看堆栈里第一个 \"at ...\" 行。")
+                        .misuse("具体可疑点需结合报错上下文判断（这是方向，不是定论）。")
+                        .nextStep("把「诊断包」发给项目 AI；或配置 AI_API_KEY 后重新提交获得专业分诊。")
+                        .build())
+                .handoff(Handoff.builder()
+                        .techStack(techStack)
+                        .suspectedPoints(List.of("具体根因需结合堆栈上下文分析"))
+                        .checkList(List.of("查看异常消息与最内层堆栈定位出错代码",
+                                "结合报错处代码与传入数据排查"))
+                        .rawError(stack)
+                        .build())
                 .build();
     }
 
