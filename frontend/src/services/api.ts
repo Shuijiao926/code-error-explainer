@@ -2,6 +2,7 @@ import axios from 'axios'
 import type {
   ApiResponse,
   DiagnosisEntry,
+  ErrorTemplate,
   ExplainResponse,
   HistoryItem,
   PageResult,
@@ -39,6 +40,7 @@ export async function fetchHistory(params: {
 
 /** 历史详情：preReport 为分诊报告 JSON 字符串 */
 export interface HistoryDetail extends HistoryItem {
+  language: string
   stackTrace: string
   preReport: string
   explanation: string
@@ -63,4 +65,10 @@ export async function removeHistory(id: number): Promise<void> {
 export async function clearHistoryAll(): Promise<void> {
   const { data } = await api.delete<ApiResponse<null>>('/history')
   ensureOk(data)
+}
+
+/** 内置异常知识卡片（离线速查） */
+export async function fetchTemplates(keyword?: string): Promise<ErrorTemplate[]> {
+  const { data } = await api.get<ApiResponse<ErrorTemplate[]>>('/templates', { params: { keyword } })
+  return ensureOk(data)
 }

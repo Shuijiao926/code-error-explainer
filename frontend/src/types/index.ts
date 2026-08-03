@@ -22,6 +22,7 @@ export interface PreTriageReport {
 export interface ExplainResponse {
   id: number
   errorType: string
+  language: string
   techStack: string[]
   summary: string
   report: PreTriageReport
@@ -41,6 +42,18 @@ export interface HistoryItem {
 export interface DiagnosisEntry {
   ts: string
   content: string
+}
+
+/** 内置异常知识卡片 */
+export interface ErrorTemplate {
+  id: number
+  errorType: string
+  category: string | null
+  causeTop3: string | null
+  fixTemplate: string | null
+  hierarchy: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 export interface PageResult<T> {

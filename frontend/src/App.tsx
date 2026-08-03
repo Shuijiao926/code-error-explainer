@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { App as AntdApp, Button, ConfigProvider, Layout, Space, Typography, theme as antdTheme } from 'antd'
-import { HistoryOutlined } from '@ant-design/icons'
+import { BookOutlined, HistoryOutlined } from '@ant-design/icons'
 import zhCN from 'antd/locale/zh_CN'
 import Home from './pages/Home'
 import HistoryDrawer from './components/HistoryDrawer'
+import TemplateDrawer from './components/TemplateDrawer'
 import ThemeToggle from './components/ThemeToggle'
 
 const { Header, Content } = Layout
@@ -11,6 +12,7 @@ const { Header, Content } = Layout
 export default function App() {
   const [darkMode, setDarkMode] = useState<boolean>(() => localStorage.getItem('cee-theme') === 'dark')
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [templateOpen, setTemplateOpen] = useState(false)
 
   const themeConfig = useMemo(
     () => ({
@@ -35,6 +37,9 @@ export default function App() {
               🔧 人话说八哥
             </Typography.Title>
             <Space>
+              <Button icon={<BookOutlined />} onClick={() => setTemplateOpen(true)}>
+                异常速查
+              </Button>
               <Button icon={<HistoryOutlined />} onClick={() => setHistoryOpen(true)}>
                 历史
               </Button>
@@ -46,6 +51,7 @@ export default function App() {
           </Content>
         </Layout>
         <HistoryDrawer open={historyOpen} onClose={() => setHistoryOpen(false)} />
+        <TemplateDrawer open={templateOpen} onClose={() => setTemplateOpen(false)} />
       </AntdApp>
     </ConfigProvider>
   )

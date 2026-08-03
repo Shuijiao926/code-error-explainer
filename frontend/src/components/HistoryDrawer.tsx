@@ -36,6 +36,7 @@ const PAGE_SIZE = 10
 interface DetailState {
   id: number
   errorType: string
+  language: string
   techStack: string[]
   createdAt: string
   report: PreTriageReport
@@ -106,6 +107,7 @@ export default function HistoryDrawer({ open, onClose }: Props) {
       setDetail({
         id: d.id,
         errorType: d.errorType,
+        language: d.language || '未知',
         techStack: d.techStack
           ? d.techStack.split(',').map((s) => s.trim()).filter(Boolean)
           : [],
@@ -293,6 +295,9 @@ export default function HistoryDrawer({ open, onClose }: Props) {
         ) : (
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
             <div>
+              <Tag color="purple" style={{ marginRight: 4, marginBottom: 4 }}>
+                {detail.language}
+              </Tag>
               {detail.techStack.map((s, i) => (
                 <Tag key={i} color="blue" style={{ marginRight: 4, marginBottom: 4 }}>
                   {s}

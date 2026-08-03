@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Alert, App as AntdApp, Button, Card, Empty, Input, Space } from 'antd'
+import { Alert, App as AntdApp, Button, Card, Empty, Input, Space, Tag } from 'antd'
+import { CheckCircleOutlined, WarningOutlined } from '@ant-design/icons'
 import ExplanationCard from '../components/ExplanationCard'
 import { explainStack } from '../services/api'
 import type { ExplainResponse } from '../types'
@@ -60,13 +61,18 @@ export default function Home() {
             }
             style={{ fontFamily: 'Consolas, Monaco, monospace' }}
           />
-          {input.trim() && !looksLikeJavaStack && (
-            <Alert
-              type="warning"
-              showIcon
-              style={{ marginTop: 12 }}
-              message="这看起来不像 Java 异常堆栈，仍可继续尝试"
-            />
+          {input.trim() && (
+            <div style={{ marginTop: 12 }}>
+              {looksLikeJavaStack ? (
+                <Tag color="green" icon={<CheckCircleOutlined />} style={{ padding: '2px 8px' }}>
+                  检测到 Java 异常堆栈，可直接生成
+                </Tag>
+              ) : (
+                <Tag color="orange" icon={<WarningOutlined />} style={{ padding: '2px 8px' }}>
+                  未检测到 Java 异常堆栈，可能不是程序报错
+                </Tag>
+              )}
+            </div>
           )}
           <div style={{ marginTop: 16, textAlign: 'right' }}>
             <Button type="primary" size="large" loading={loading} onClick={handleExplain}>

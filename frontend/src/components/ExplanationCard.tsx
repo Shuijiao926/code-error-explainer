@@ -8,12 +8,13 @@ interface Props {
 
 /** 主页结果卡片：摘要 + 双段式报告正文 */
 export default function ExplanationCard({ result }: Props) {
-  const { errorType, techStack, summary, report, createdAt } = result
+  const { errorType, language, techStack, summary, report, createdAt } = result
 
   return (
     <Card title={<span>🧭 {summary}</span>}>
       <Typography.Text type="secondary">
-        异常类型：{errorType} · 技术栈：{techStack.join(', ') || '未知'} · {createdAt}
+        异常类型：{errorType} · 语言：{language || '未知'} · 技术栈：{techStack.join(', ') || '未知'} ·{' '}
+        {createdAt}
       </Typography.Text>
       <Divider style={{ margin: '12px 0' }} />
       <ReportBody person={report?.personReport} handoff={report?.handoff} />
