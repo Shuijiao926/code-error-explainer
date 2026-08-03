@@ -53,3 +53,21 @@
 - **新手引导**：空状态「试试示例堆栈」；生成中提示"5-30 秒"；非堆栈软提示（正则
   `/(Exception|Error|Caused by|^\s*at\s)/m` 不命中时警告，不阻断）。
 - **测试隔离**：H2 内存库在测试类内共享，集成测试用 `@BeforeEach clearAll()` 保证计数断言独立。
+
+## V1.3 多语言约定
+
+- **语言识别**：`LanguageDetector`（启发式，按特征优先 Python→Go→Java→Node→unknown）。
+  规则要点：Node 用 `(TypeError|...):` 与 `.js/.ts` 帧；Java 用 `java.lang.*` / `Caused by:` / `.java:N`。
+  注意 `OutOfMemoryError:` 不能误判为 Node（Java 检查先于 Node 通用 Error）。
+- **错误类型提取**：`ErrorExplainService.extractErrorType(stack, language)` 按语言分支
+  （Python 取最后 `XXXError:` 行；Node 取错误名；Go 取 panic 信息截断）。
+- **AI 提示词**：`OpenAiCompatAIService.systemPrompt(language)` 按语言切换角色，其余分诊约束不变。
+- **Mock**：`MockAIService.explain(stack, techStack, language)` 按语言分发，复用共享错误提取。
+- **契约字段**：`ExplainResponse` / `error_history` 增加 `language`（java/python/node/go/unknown，
+  unknown 时错误类型回退 Java 规则）。
+
+## V1.3 知识卡片约定
+
+- `error_template` 表 + `sql/seed-templates.sql`（幂等种子 ≥7 类），`GET /api/templates?keyword=`。
+- 卡片是**独立速查模块**，暂不与 AI 分诊联动。
+- `spring.sql.init.encoding: UTF-8` 必须设置，否则 Windows 下读测试脚本中文会乱码。

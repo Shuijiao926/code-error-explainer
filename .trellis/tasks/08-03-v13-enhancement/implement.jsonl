@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/ai-triage.md", "reason": "双段式分诊契约 + 技术栈识别规则，多语言扩展需对齐"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "建表/种子/迁移约定（幂等模式、JSON 数组字段）"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "多语言提取/提示词模板化会复用结构，防重复"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "language 字段跨 前后端/DB/AI 四层，需核对契约"}
