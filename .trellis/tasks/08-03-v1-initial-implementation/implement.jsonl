@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "本任务跨越 前后端/DB/AI 多层，实现前先过跨层思考清单"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "统一响应/异常提取/JSON 解析等多处复用，防重复造轮子"}
+{"file": ".trellis/spec/guides/index.md", "reason": "思考指南索引，含修改前搜索规则与验证规则"}
+{"file": ".trellis/tasks/08-03-v1-initial-implementation/research/mybatis-plus-boot4-compat.md", "reason": "SB4 + MyBatis-Plus 兼容性与 starter 版本选型结论（3.5.16 + jsqlparser）"}
