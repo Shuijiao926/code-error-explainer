@@ -31,15 +31,13 @@ public class ErrorExplainService {
     private final ErrorHistoryMapper historyMapper;
     private final ObjectMapper objectMapper;
 
-    public ExplainResponse explain(String stackTrace, List<String> techStackOverride) {
+    public ExplainResponse explain(String stackTrace) {
         if (stackTrace == null || stackTrace.isBlank()) {
             throw new BusinessException("堆栈信息不能为空");
         }
 
         String errorType = extractErrorType(stackTrace);
-        List<String> techStack = (techStackOverride != null && !techStackOverride.isEmpty())
-                ? techStackOverride
-                : TechStackDetector.detect(stackTrace);
+        List<String> techStack = TechStackDetector.detect(stackTrace);
 
         PreTriageReport report = aiService.explain(stackTrace, techStack);
         // 保证 handoff 与最终技术栈/原始堆栈一致

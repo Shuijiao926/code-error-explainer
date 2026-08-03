@@ -31,12 +31,22 @@ public class HistoryService {
     private final ObjectMapper objectMapper;
 
     public PageResult<ErrorHistory> page(long page, long size, String keyword) {
+        return page(page, size, keyword, "all");
+    }
+
+    public PageResult<ErrorHistory> page(long page, long size, String keyword, String status) {
         Page<ErrorHistory> p = new Page<>(Math.max(page, 1), Math.max(size, 1));
         LambdaQueryWrapper<ErrorHistory> wrapper = new LambdaQueryWrapper<>();
         if (keyword != null && !keyword.isBlank()) {
             wrapper.and(w -> w.like(ErrorHistory::getErrorType, keyword)
                     .or().like(ErrorHistory::getSummary, keyword)
                     .or().like(ErrorHistory::getTechStack, keyword));
+        }
+        // 状态筛选：pending=待回填（无诊断），diagnosed=已诊断（有诊断）
+        if ("pending".equalsIgnoreCase(status)) {
+            wrapper.isNull(ErrorHistory::getFinalDiagnosis);
+        } else if ("diagnosed".equalsIgnoreCase(status)) {
+            wrapper.isNotNull(ErrorHistory::getFinalDiagnosis);
         }
         wrapper.orderByDesc(ErrorHistory::getCreatedAt)
                 .orderByDesc(ErrorHistory::getId);
