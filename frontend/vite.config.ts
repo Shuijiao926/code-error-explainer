@@ -8,7 +8,7 @@ export default defineConfig({
     proxy: {
       // 开发期把 /api 代理到后端，免 CORS
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost:16080',
         changeOrigin: true,
       },
     },
