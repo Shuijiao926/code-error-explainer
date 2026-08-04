@@ -92,3 +92,16 @@
 - 引入 `react-router-dom`（v7，`BrowserRouter`），路由：`/` 分诊、`/knowledge` 异常速查、
   `/history` 历史、`/logs` 调用日志；Header 用 antd `Menu` + `useLocation` 高亮。
 - 页面组件放 `frontend/src/pages/`；从 Drawer 升级为页面时保留页内嵌套 Drawer（如 HistoryPage 的详情抽屉）。
+
+## V1.5 长文本存储约定
+
+- **大字段用 MEDIUMTEXT**：`error_history.stack_trace/explanation/pre_report/final_diagnosis` 为
+  MEDIUMTEXT(16MB)，避免 TEXT(64KB) 溢出（用户输入的堆栈不可控，类型须留足余量）。
+- **追加型数据一律子表，禁止单列 JSON 数组追加**：项目 AI 诊断存 `history_diagnosis`（一行一条，
+  `content` MEDIUMTEXT + `ts` VARCHAR(20)）；对外 `finalDiagnosis` 字段由子表**重建**（空→null、
+  列表有诊断→"[]"），前端契约保持不变。状态筛选（pending/diagnosed）用
+  `EXISTS (SELECT 1 FROM history_diagnosis hd WHERE hd.history_id = error_history.id)`。
+- **日志表必须有保留期**：`ai_call_log` 由 `AiLogRetentionTask`（`@Scheduled` 每日 03:00）按
+  `ai.call-log-retention-days`（默认 30）清理；主类需 `@EnableScheduling`。
+- **入库失败兜底**：`ErrorExplainService` 捕获 `DataAccessException` → 删除孤儿 `ai_call_log`
+  （`AiCallRecorder.delete`）+ 抛 `BusinessException` 友好提示，保证"日志与记录一致"不裂开。
