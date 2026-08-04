@@ -1,0 +1,29 @@
+{
+  "id": "v14-pages-and-observability",
+  "name": "v14-pages-and-observability",
+  "title": "V1.4 前端页面重构 + AI 调用可观测",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "power",
+  "assignee": "power",
+  "createdAt": "2026-08-03",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-03-v14-pages",
+    "08-03-v14-ai-call-log"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

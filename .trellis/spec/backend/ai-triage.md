@@ -71,3 +71,24 @@
 - `error_template` 表 + `sql/seed-templates.sql`（幂等种子 ≥7 类），`GET /api/templates?keyword=`。
 - 卡片是**独立速查模块**，暂不与 AI 分诊联动。
 - `spring.sql.init.encoding: UTF-8` 必须设置，否则 Windows 下读测试脚本中文会乱码。
+
+## V1.4 AI 调用可观测性
+
+- **`ai_call_log` 表**（`sql/migrate-v14.sql` 幂等建表）：`id / history_id / provider / model /
+  status(success|fallback) / duration_ms / prompt_tokens / completion_tokens /
+  input_excerpt(前200字符) / error_message / created_at`，索引 `idx_history_id`、`idx_created_at`。
+- **落库位置**：`AIService` 两个实现**内部**（`AiCallRecorder.record()`）——token/状态只有调用处可知，
+  不在 service 层猜状态。Mock 也记录：`provider=mock`、`status=success`（模板成功路径），没配 Key 也可观测。
+- **接口签名变更**：`AIService.explain()` 返回 `AiCallOutcome(report, logId)`（而非裸 `PreTriageReport`），
+  把日志 id 随结果带出，供 `ErrorExplainService` 在 `error_history` 入库后 `linkHistory(logId, historyId)` 回填关联。
+- **token 解析**：真实响应 `usage.prompt_tokens/completion_tokens`，负数视为无 token（置 null）。
+- **查询接口**：`GET /api/ai-logs?page&size&status&provider&historyId` → `PageResult<AiCallLog>`。
+- **测试隔离**：H2 集成测试需在 `@BeforeEach` 里 `aiCallLogMapper.delete(null)`，否则日志跨用例累积。
+- > **Warning**: `@Slf4j` logger 字段名是 `log`；在 AI service 方法内**勿把局部日志对象命名为 `log`**，
+  > 会遮蔽 logger 导致 `log.warn(...)` 编译报错（本次已踩坑，用 `callLog` 命名）。
+
+## V1.4 前端路由约定
+
+- 引入 `react-router-dom`（v7，`BrowserRouter`），路由：`/` 分诊、`/knowledge` 异常速查、
+  `/history` 历史、`/logs` 调用日志；Header 用 antd `Menu` + `useLocation` 高亮。
+- 页面组件放 `frontend/src/pages/`；从 Drawer 升级为页面时保留页内嵌套 Drawer（如 HistoryPage 的详情抽屉）。
