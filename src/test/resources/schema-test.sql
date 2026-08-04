@@ -24,6 +24,21 @@ CREATE TABLE IF NOT EXISTS error_template (
   updated_at   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
 );
 
+-- V1.4: AI 调用日志
+CREATE TABLE IF NOT EXISTS ai_call_log (
+  id                BIGINT       AUTO_INCREMENT PRIMARY KEY,
+  history_id        BIGINT,
+  provider          VARCHAR(50),
+  model             VARCHAR(100),
+  status            VARCHAR(20),
+  duration_ms       BIGINT,
+  prompt_tokens     INT,
+  completion_tokens INT,
+  input_excerpt     VARCHAR(1000),
+  error_message     VARCHAR(1000),
+  created_at        TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+);
+
 -- 知识卡片测试种子（先清空保证幂等）
 DELETE FROM error_template;
 INSERT INTO error_template (error_type, category, cause_top3, fix_template, hierarchy) VALUES

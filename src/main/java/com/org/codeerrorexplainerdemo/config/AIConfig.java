@@ -1,6 +1,7 @@
 package com.org.codeerrorexplainerdemo.config;
 
 import com.org.codeerrorexplainerdemo.service.ai.AIService;
+import com.org.codeerrorexplainerdemo.service.ai.AiCallRecorder;
 import com.org.codeerrorexplainerdemo.service.ai.MockAIService;
 import com.org.codeerrorexplainerdemo.service.ai.OpenAiCompatAIService;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -16,10 +17,10 @@ import tools.jackson.databind.ObjectMapper;
 public class AIConfig {
 
     @Bean
-    public AIService aiService(AiProperties props, ObjectMapper objectMapper) {
+    public AIService aiService(AiProperties props, ObjectMapper objectMapper, AiCallRecorder recorder) {
         boolean mock = "mock".equalsIgnoreCase(props.getProvider())
                 || props.getApiKey() == null
                 || props.getApiKey().isBlank();
-        return mock ? new MockAIService() : new OpenAiCompatAIService(props, objectMapper);
+        return mock ? new MockAIService(recorder) : new OpenAiCompatAIService(props, objectMapper, recorder);
     }
 }

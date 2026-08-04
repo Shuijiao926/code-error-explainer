@@ -1,7 +1,5 @@
 package com.org.codeerrorexplainerdemo.service.ai;
 
-import com.org.codeerrorexplainerdemo.dto.PreTriageReport;
-
 import java.util.List;
 
 /**
@@ -15,7 +13,7 @@ public interface AIService {
      * @param stackTrace 原始异常堆栈
      * @param techStack  已识别的技术栈
      * @param language   堆栈语言（java/python/node/go/unknown）
-     * @return 前置分诊报告
+     * @return 分诊报告 + 本次调用日志 id
      */
-    PreTriageReport explain(String stackTrace, List<String> techStack, String language);
+    AiCallOutcome explain(String stackTrace, List<String> techStack, String language);
 }

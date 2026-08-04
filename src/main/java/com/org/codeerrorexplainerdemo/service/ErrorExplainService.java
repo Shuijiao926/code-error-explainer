@@ -7,6 +7,8 @@ import com.org.codeerrorexplainerdemo.dto.PreTriageReport;
 import com.org.codeerrorexplainerdemo.entity.ErrorHistory;
 import com.org.codeerrorexplainerdemo.mapper.ErrorHistoryMapper;
 import com.org.codeerrorexplainerdemo.service.ai.AIService;
+import com.org.codeerrorexplainerdemo.service.ai.AiCallOutcome;
+import com.org.codeerrorexplainerdemo.service.ai.AiCallRecorder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,7 @@ public class ErrorExplainService {
     private final AIService aiService;
     private final ErrorHistoryMapper historyMapper;
     private final ObjectMapper objectMapper;
+    private final AiCallRecorder aiCallRecorder;
 
     public ExplainResponse explain(String stackTrace) {
         if (stackTrace == null || stackTrace.isBlank()) {
@@ -40,7 +43,8 @@ public class ErrorExplainService {
         String errorType = extractErrorType(stackTrace, language);
         List<String> techStack = TechStackDetector.detect(stackTrace);
 
-        PreTriageReport report = aiService.explain(stackTrace, techStack, language);
+        AiCallOutcome outcome = aiService.explain(stackTrace, techStack, language);
+        PreTriageReport report = outcome.report();
         // 保证 handoff 与最终技术栈/原始堆栈一致
         if (report.getHandoff() == null) {
             report.setHandoff(Handoff.builder().build());
@@ -70,6 +74,8 @@ public class ErrorExplainService {
         history.setExplanation(preReportJson);
         history.setSummary(truncate(summary == null || summary.isBlank() ? errorType : summary, SUMMARY_MAX));
         historyMapper.insert(history);
+        // 回填 AI 调用日志与 history 的关联
+        aiCallRecorder.linkHistory(outcome.logId(), history.getId());
 
         log.info("pre-triage done: id={}, lang={}, type={}, stack={}", history.getId(), language, errorType, techStack);
         return ExplainResponse.builder()

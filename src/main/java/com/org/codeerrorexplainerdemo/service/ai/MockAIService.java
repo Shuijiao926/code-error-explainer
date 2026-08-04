@@ -3,6 +3,7 @@ package com.org.codeerrorexplainerdemo.service.ai;
 import com.org.codeerrorexplainerdemo.dto.Handoff;
 import com.org.codeerrorexplainerdemo.dto.PersonReport;
 import com.org.codeerrorexplainerdemo.dto.PreTriageReport;
+import com.org.codeerrorexplainerdemo.entity.AiCallLog;
 import com.org.codeerrorexplainerdemo.service.ErrorExplainService;
 
 import java.util.List;
@@ -13,13 +14,30 @@ import java.util.List;
  */
 public class MockAIService implements AIService {
 
+    private final AiCallRecorder recorder;
+
+    public MockAIService(AiCallRecorder recorder) {
+        this.recorder = recorder;
+    }
+
     @Override
-    public PreTriageReport explain(String stackTrace, List<String> techStack, String language) {
+    public AiCallOutcome explain(String stackTrace, List<String> techStack, String language) {
+        long start = System.nanoTime();
         String type = ErrorExplainService.extractErrorType(stackTrace, language);
-        if ("python".equals(language)) return python(type, stackTrace, techStack);
-        if ("node".equals(language)) return node(type, stackTrace, techStack);
-        if ("go".equals(language)) return go(type, stackTrace, techStack);
-        return java(type, stackTrace, techStack);
+        PreTriageReport report;
+        if ("python".equals(language)) report = python(type, stackTrace, techStack);
+        else if ("node".equals(language)) report = node(type, stackTrace, techStack);
+        else if ("go".equals(language)) report = go(type, stackTrace, techStack);
+        else report = java(type, stackTrace, techStack);
+
+        AiCallLog log = new AiCallLog();
+        log.setProvider("mock");
+        log.setModel("mock");
+        log.setStatus("success");
+        log.setDurationMs(AiCallRecorder.elapsedMs(start));
+        log.setInputExcerpt(AiCallRecorder.excerpt(stackTrace));
+        Long logId = recorder.record(log);
+        return new AiCallOutcome(report, logId);
     }
 
     // ============ Java（V1.1 既有模板） ============

@@ -3,7 +3,9 @@ package com.org.codeerrorexplainerdemo;
 import com.org.codeerrorexplainerdemo.dto.DiagnosisEntry;
 import com.org.codeerrorexplainerdemo.dto.ExplainResponse;
 import com.org.codeerrorexplainerdemo.dto.PageResult;
+import com.org.codeerrorexplainerdemo.entity.AiCallLog;
 import com.org.codeerrorexplainerdemo.entity.ErrorHistory;
+import com.org.codeerrorexplainerdemo.mapper.AiCallLogMapper;
 import com.org.codeerrorexplainerdemo.service.ErrorExplainService;
 import com.org.codeerrorexplainerdemo.service.HistoryService;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,10 +32,14 @@ class ExplainFlowIntegrationTest {
     @Autowired
     private HistoryService historyService;
 
+    @Autowired
+    private AiCallLogMapper aiCallLogMapper;
+
     /** H2 内存库在类内共享，每个用例前清空保证计数断言独立 */
     @BeforeEach
     void cleanDb() {
         historyService.clearAll();
+        aiCallLogMapper.delete(null);
     }
 
     @Test
@@ -67,6 +73,20 @@ class ExplainFlowIntegrationTest {
         // 4. 单条删除后为空
         historyService.delete(resp.getId());
         assertThat(historyService.page(1, 20, null).getTotal()).isZero();
+    }
+
+    @Test
+    void aiCallLog_recordedForMockExplain() {
+        ExplainResponse resp = explainService.explain("java.lang.NullPointerException: null");
+
+        List<AiCallLog> logs = aiCallLogMapper.selectList(null);
+        assertThat(logs).hasSize(1);
+        AiCallLog log = logs.get(0);
+        assertThat(log.getProvider()).isEqualTo("mock");
+        assertThat(log.getStatus()).isEqualTo("success");
+        assertThat(log.getHistoryId()).isEqualTo(resp.getId());
+        assertThat(log.getDurationMs()).isNotNull();
+        assertThat(log.getInputExcerpt()).contains("NullPointerException");
     }
 
     @Test

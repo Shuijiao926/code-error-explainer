@@ -4,6 +4,7 @@ import com.org.codeerrorexplainerdemo.config.AiProperties;
 import com.org.codeerrorexplainerdemo.dto.Handoff;
 import com.org.codeerrorexplainerdemo.dto.PersonReport;
 import com.org.codeerrorexplainerdemo.dto.PreTriageReport;
+import com.org.codeerrorexplainerdemo.entity.AiCallLog;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -64,11 +65,13 @@ public class OpenAiCompatAIService implements AIService {
 
     private final AiProperties props;
     private final ObjectMapper objectMapper;
+    private final AiCallRecorder recorder;
     private final RestClient restClient;
 
-    public OpenAiCompatAIService(AiProperties props, ObjectMapper objectMapper) {
+    public OpenAiCompatAIService(AiProperties props, ObjectMapper objectMapper, AiCallRecorder recorder) {
         this.props = props;
         this.objectMapper = objectMapper;
+        this.recorder = recorder;
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(10));
         factory.setReadTimeout(props.getTimeout());
@@ -79,7 +82,7 @@ public class OpenAiCompatAIService implements AIService {
     }
 
     @Override
-    public PreTriageReport explain(String stackTrace, List<String> techStack, String language) {
+    public AiCallOutcome explain(String stackTrace, List<String> techStack, String language) {
         String techStackHint = techStack == null || techStack.isEmpty() ? "未识别" : String.join(", ", techStack);
         String lang = language == null || language.isBlank() ? "未知" : language;
         String userContent = "语言：" + lang
@@ -93,6 +96,11 @@ public class OpenAiCompatAIService implements AIService {
                         Map.of("role", "user", "content", userContent)
                 )
         );
+        long start = System.nanoTime();
+        AiCallLog callLog = new AiCallLog();
+        callLog.setProvider(props.getProvider());
+        callLog.setModel(props.getModel());
+        callLog.setInputExcerpt(AiCallRecorder.excerpt(stackTrace));
         try {
             String raw = restClient.post()
                     .uri("/chat/completions")
@@ -109,11 +117,29 @@ public class OpenAiCompatAIService implements AIService {
             if (content.isBlank()) {
                 throw new IllegalStateException("AI 未返回解释内容");
             }
-            return finalizeReport(parseReport(content), stackTrace, techStack);
+            int promptTokens = root.at("/usage/prompt_tokens").asInt(-1);
+            int completionTokens = root.at("/usage/completion_tokens").asInt(-1);
+            callLog.setStatus("success");
+            callLog.setPromptTokens(promptTokens >= 0 ? promptTokens : null);
+            callLog.setCompletionTokens(completionTokens >= 0 ? completionTokens : null);
+            callLog.setDurationMs(AiCallRecorder.elapsedMs(start));
+            Long logId = recorder.record(callLog);
+            return new AiCallOutcome(finalizeReport(parseReport(content), stackTrace, techStack), logId);
         } catch (Exception e) {
             log.warn("AI 调用失败，返回兜底分诊：{}", e.getMessage());
-            return fallback(stackTrace, techStack);
+            callLog.setStatus("fallback");
+            callLog.setErrorMessage(truncate(e.getMessage(), 1000));
+            callLog.setDurationMs(AiCallRecorder.elapsedMs(start));
+            Long logId = recorder.record(callLog);
+            return new AiCallOutcome(fallback(stackTrace, techStack), logId);
         }
+    }
+
+    private String truncate(String s, int max) {
+        if (s == null) {
+            return null;
+        }
+        return s.length() <= max ? s : s.substring(0, max);
     }
 
     /** 解析 AI 返回的 JSON（剥离可能存在的 markdown 围栏），并统一覆盖技术栈与原始堆栈 */
