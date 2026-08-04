@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   App as AntdApp,
   Button,
+  Card,
   Divider,
   Drawer,
   Empty,
@@ -23,13 +24,8 @@ import {
   removeHistory,
 } from '../services/api'
 import type { HistoryStatus } from '../services/api'
-import ReportBody from './ReportBody'
+import ReportBody from '../components/ReportBody'
 import type { DiagnosisEntry, HistoryItem, PreTriageReport } from '../types'
-
-interface Props {
-  open: boolean
-  onClose: () => void
-}
 
 const PAGE_SIZE = 10
 
@@ -43,7 +39,7 @@ interface DetailState {
   entries: DiagnosisEntry[]
 }
 
-export default function HistoryDrawer({ open, onClose }: Props) {
+export default function HistoryPage() {
   const { message } = AntdApp.useApp()
   const [records, setRecords] = useState<HistoryItem[]>([])
   const [total, setTotal] = useState(0)
@@ -72,14 +68,9 @@ export default function HistoryDrawer({ open, onClose }: Props) {
   }
 
   useEffect(() => {
-    if (open) {
-      setPage(1)
-      setKeyword('')
-      setStatus('all')
-      load(1, '', 'all')
-    }
+    load(1, '', 'all')
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+  }, [])
 
   const onSearch = (value: string) => {
     setKeyword(value)
@@ -175,115 +166,114 @@ export default function HistoryDrawer({ open, onClose }: Props) {
     (raw ?? '').split(',').map((s) => s.trim()).filter(Boolean)
 
   return (
-    <Drawer
-      title="📋 历史记录"
-      width={460}
-      open={open}
-      onClose={onClose}
-      extra={
-        <Popconfirm title="确定清空全部历史？" onConfirm={onClear} okText="清空" cancelText="取消">
-          <Button danger size="small" icon={<DeleteOutlined />}>
-            清空
-          </Button>
-        </Popconfirm>
-      }
-    >
-      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-        <Segmented
-          block
-          value={status}
-          onChange={(v) => {
-            const st = v as HistoryStatus
-            setStatus(st)
-            setPage(1)
-            load(1, keyword, st)
-          }}
-          options={[
-            { label: '全部', value: 'all' },
-            { label: '待回填', value: 'pending' },
-            { label: '已诊断', value: 'diagnosed' },
-          ]}
-        />
-        <Input.Search placeholder="搜索异常类型 / 概要 / 技术栈" allowClear onSearch={onSearch} />
-
-        {records.length === 0 && !loading ? (
-          <Empty description="暂无历史记录" style={{ padding: 40 }} />
-        ) : (
-          <List
-            loading={loading}
-            dataSource={records}
-            renderItem={(item) => (
-              <List.Item
-                actions={[
-                  <Button
-                    key="view"
-                    size="small"
-                    icon={<EyeOutlined />}
-                    onClick={() => openDetail(item)}
-                  >
-                    详情
-                  </Button>,
-                  <Popconfirm
-                    key="del"
-                    title="删除这条记录？"
-                    onConfirm={() => onDelete(item.id)}
-                    okText="删除"
-                    cancelText="取消"
-                  >
-                    <Button size="small" danger type="text" icon={<DeleteOutlined />} />
-                  </Popconfirm>,
-                ]}
-              >
-                <List.Item.Meta
-                  title={
-                    <Space>
-                      <Typography.Text strong>{item.errorType}</Typography.Text>
-                      {item.finalDiagnosis ? (
-                        <Tag color="green">已诊断</Tag>
-                      ) : (
-                        <Tag>待回填</Tag>
-                      )}
-                    </Space>
-                  }
-                  description={
-                    <>
-                      <div>{item.summary}</div>
-                      {techStackTags(item.techStack).length > 0 && (
-                        <div style={{ marginTop: 4 }}>
-                          {techStackTags(item.techStack).map((s, i) => (
-                            <Tag key={i} color="blue" style={{ marginRight: 4, marginBottom: 4 }}>
-                              {s}
-                            </Tag>
-                          ))}
-                        </div>
-                      )}
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        {item.createdAt}
-                      </Typography.Text>
-                    </>
-                  }
-                />
-              </List.Item>
-            )}
-          />
-        )}
-
-        {total > PAGE_SIZE && (
-          <Pagination
-            current={page}
-            pageSize={PAGE_SIZE}
-            total={total}
-            onChange={(p) => {
-              setPage(p)
-              load(p, keyword)
+    <div style={{ maxWidth: 960, margin: '0 auto' }}>
+      <Card
+        title="📋 历史记录"
+        extra={
+          <Popconfirm title="确定清空全部历史？" onConfirm={onClear} okText="清空" cancelText="取消">
+            <Button danger size="small" icon={<DeleteOutlined />}>
+              清空
+            </Button>
+          </Popconfirm>
+        }
+      >
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Segmented
+            block
+            value={status}
+            onChange={(v) => {
+              const st = v as HistoryStatus
+              setStatus(st)
+              setPage(1)
+              load(1, keyword, st)
             }}
-            showSizeChanger={false}
-            size="small"
+            options={[
+              { label: '全部', value: 'all' },
+              { label: '待回填', value: 'pending' },
+              { label: '已诊断', value: 'diagnosed' },
+            ]}
           />
-        )}
-      </Space>
+          <Input.Search placeholder="搜索异常类型 / 概要 / 技术栈" allowClear onSearch={onSearch} />
 
-      {/* 详情抽屉（嵌套在历史抽屉之上） */}
+          {records.length === 0 && !loading ? (
+            <Empty description="暂无历史记录" style={{ padding: 40 }} />
+          ) : (
+            <List
+              loading={loading}
+              dataSource={records}
+              renderItem={(item) => (
+                <List.Item
+                  actions={[
+                    <Button
+                      key="view"
+                      size="small"
+                      icon={<EyeOutlined />}
+                      onClick={() => openDetail(item)}
+                    >
+                      详情
+                    </Button>,
+                    <Popconfirm
+                      key="del"
+                      title="删除这条记录？"
+                      onConfirm={() => onDelete(item.id)}
+                      okText="删除"
+                      cancelText="取消"
+                    >
+                      <Button size="small" danger type="text" icon={<DeleteOutlined />} />
+                    </Popconfirm>,
+                  ]}
+                >
+                  <List.Item.Meta
+                    title={
+                      <Space>
+                        <Typography.Text strong>{item.errorType}</Typography.Text>
+                        {item.finalDiagnosis ? (
+                          <Tag color="green">已诊断</Tag>
+                        ) : (
+                          <Tag>待回填</Tag>
+                        )}
+                      </Space>
+                    }
+                    description={
+                      <>
+                        <div>{item.summary}</div>
+                        {techStackTags(item.techStack).length > 0 && (
+                          <div style={{ marginTop: 4 }}>
+                            {techStackTags(item.techStack).map((s, i) => (
+                              <Tag key={i} color="blue" style={{ marginRight: 4, marginBottom: 4 }}>
+                                {s}
+                              </Tag>
+                            ))}
+                          </div>
+                        )}
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          {item.createdAt}
+                        </Typography.Text>
+                      </>
+                    }
+                  />
+                </List.Item>
+              )}
+            />
+          )}
+
+          {total > PAGE_SIZE && (
+            <Pagination
+              current={page}
+              pageSize={PAGE_SIZE}
+              total={total}
+              onChange={(p) => {
+                setPage(p)
+                load(p, keyword)
+              }}
+              showSizeChanger={false}
+              size="small"
+            />
+          )}
+        </Space>
+      </Card>
+
+      {/* 详情抽屉 */}
       <Drawer
         title={`🔍 ${detail?.errorType ?? '历史详情'}`}
         width={420}
@@ -308,10 +298,7 @@ export default function HistoryDrawer({ open, onClose }: Props) {
               </Typography.Text>
             </div>
 
-            <ReportBody
-              person={detail.report.personReport}
-              handoff={detail.report.handoff}
-            />
+            <ReportBody person={detail.report.personReport} handoff={detail.report.handoff} />
 
             <Divider />
             <Typography.Title level={5}>🤝 项目 AI 诊断记录</Typography.Title>
@@ -348,6 +335,6 @@ export default function HistoryDrawer({ open, onClose }: Props) {
           </Space>
         )}
       </Drawer>
-    </Drawer>
+    </div>
   )
 }

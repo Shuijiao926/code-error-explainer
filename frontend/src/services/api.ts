@@ -1,5 +1,6 @@
 import axios from 'axios'
 import type {
+  AiCallLog,
   ApiResponse,
   DiagnosisEntry,
   ErrorTemplate,
@@ -70,5 +71,17 @@ export async function clearHistoryAll(): Promise<void> {
 /** 内置异常知识卡片（离线速查） */
 export async function fetchTemplates(keyword?: string): Promise<ErrorTemplate[]> {
   const { data } = await api.get<ApiResponse<ErrorTemplate[]>>('/templates', { params: { keyword } })
+  return ensureOk(data)
+}
+
+/** AI 调用日志（分页/筛选） */
+export async function fetchAiLogs(params: {
+  page: number
+  size: number
+  status?: string
+  provider?: string
+  historyId?: number
+}): Promise<PageResult<AiCallLog>> {
+  const { data } = await api.get<ApiResponse<PageResult<AiCallLog>>>('/ai-logs', { params })
   return ensureOk(data)
 }

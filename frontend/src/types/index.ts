@@ -44,6 +44,21 @@ export interface DiagnosisEntry {
   content: string
 }
 
+/** AI 调用日志 */
+export interface AiCallLog {
+  id: number
+  historyId: number | null
+  provider: string | null
+  model: string | null
+  status: string | null
+  durationMs: number | null
+  promptTokens: number | null
+  completionTokens: number | null
+  inputExcerpt: string | null
+  errorMessage: string | null
+  createdAt: string
+}
+
 /** 内置异常知识卡片 */
 export interface ErrorTemplate {
   id: number
