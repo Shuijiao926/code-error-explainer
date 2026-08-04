@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Route, Routes, useLocation } from 'react-router-dom'
+import { Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { App as AntdApp, ConfigProvider, Layout, Menu, Space, Typography, theme as antdTheme } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import Home from './pages/Home'
@@ -20,6 +20,7 @@ const NAV_ITEMS = [
 export default function App() {
   const [darkMode, setDarkMode] = useState<boolean>(() => localStorage.getItem('cee-theme') === 'dark')
   const location = useLocation()
+  const navigate = useNavigate()
 
   const themeConfig = useMemo(
     () => ({
@@ -37,6 +38,10 @@ export default function App() {
 
   const selectedKey = NAV_ITEMS.find((i) => location.pathname === i.key)?.key ?? '/'
 
+  // Header 背景/文字颜色跟随主题（antd Header 默认深底不随算法变，需手动适配）
+  const headerBg = darkMode ? '#141414' : '#fff'
+  const headerColor = darkMode ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.88)'
+
   return (
     <ConfigProvider locale={zhCN} theme={themeConfig}>
       <AntdApp>
@@ -47,6 +52,8 @@ export default function App() {
               alignItems: 'center',
               justifyContent: 'space-between',
               paddingInline: 24,
+              background: headerBg,
+              color: headerColor,
             }}
           >
             <Space size="middle">
@@ -57,6 +64,7 @@ export default function App() {
                 mode="horizontal"
                 selectedKeys={[selectedKey]}
                 items={NAV_ITEMS}
+                onClick={({ key }) => navigate(key)}
                 style={{ background: 'transparent', minWidth: 320 }}
               />
             </Space>
