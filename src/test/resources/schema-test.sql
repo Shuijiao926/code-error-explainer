@@ -39,6 +39,15 @@ CREATE TABLE IF NOT EXISTS ai_call_log (
   created_at        TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
 );
 
+-- V1.5: 项目AI最终诊断（一对多子表，替代 final_diagnosis 单列追加）
+CREATE TABLE IF NOT EXISTS history_diagnosis (
+  id          BIGINT      AUTO_INCREMENT PRIMARY KEY,
+  history_id  BIGINT      NOT NULL,
+  content     CLOB        NOT NULL,
+  ts          VARCHAR(20) NOT NULL,
+  created_at  TIMESTAMP   DEFAULT CURRENT_TIMESTAMP
+);
+
 -- 知识卡片测试种子（先清空保证幂等）
 DELETE FROM error_template;
 INSERT INTO error_template (error_type, category, cause_top3, fix_template, hierarchy) VALUES

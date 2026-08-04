@@ -11,6 +11,7 @@ import com.org.codeerrorexplainerdemo.service.ai.AiCallOutcome;
 import com.org.codeerrorexplainerdemo.service.ai.AiCallRecorder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
 
@@ -73,9 +74,16 @@ public class ErrorExplainService {
         // explanation 为 V1.0 遗留列（NOT NULL），与 pre_report 保持同内容以兼容旧表
         history.setExplanation(preReportJson);
         history.setSummary(truncate(summary == null || summary.isBlank() ? errorType : summary, SUMMARY_MAX));
-        historyMapper.insert(history);
-        // 回填 AI 调用日志与 history 的关联
-        aiCallRecorder.linkHistory(outcome.logId(), history.getId());
+        try {
+            historyMapper.insert(history);
+            // 回填 AI 调用日志与 history 的关联
+            aiCallRecorder.linkHistory(outcome.logId(), history.getId());
+        } catch (DataAccessException e) {
+            // 入库失败（多为内容过长）：清理孤儿调用日志，友好提示而非裸 500
+            log.warn("history 入库失败，清理孤儿调用日志：{}", e.getMessage());
+            aiCallRecorder.delete(outcome.logId());
+            throw new BusinessException("保存失败：堆栈或报告内容过长，请精简后重试");
+        }
 
         log.info("pre-triage done: id={}, lang={}, type={}, stack={}", history.getId(), language, errorType, techStack);
         return ExplainResponse.builder()

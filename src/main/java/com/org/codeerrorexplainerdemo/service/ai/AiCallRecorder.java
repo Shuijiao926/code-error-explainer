@@ -22,6 +22,14 @@ public class AiCallRecorder {
         return log.getId();
     }
 
+    /** 删除一条调用日志（history 入库失败时清理孤儿日志，保持日志与记录一致） */
+    public void delete(Long logId) {
+        if (logId == null) {
+            return;
+        }
+        aiCallLogMapper.deleteById(logId);
+    }
+
     /** history 入库后回填 history_id（仅更新该列，不覆盖其他字段） */
     public void linkHistory(Long logId, Long historyId) {
         if (logId == null) {

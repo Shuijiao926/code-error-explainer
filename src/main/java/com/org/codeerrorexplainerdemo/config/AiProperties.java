@@ -24,4 +24,7 @@ public class AiProperties {
 
     /** 请求超时 */
     private Duration timeout = Duration.ofSeconds(30);
+
+    /** ai_call_log 保留天数，超期由定时任务清理 */
+    private Integer callLogRetentionDays = 30;
 }

@@ -3,9 +3,12 @@ package com.org.codeerrorexplainerdemo;
 import com.org.codeerrorexplainerdemo.dto.DiagnosisEntry;
 import com.org.codeerrorexplainerdemo.dto.ExplainResponse;
 import com.org.codeerrorexplainerdemo.dto.PageResult;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.org.codeerrorexplainerdemo.entity.AiCallLog;
 import com.org.codeerrorexplainerdemo.entity.ErrorHistory;
+import com.org.codeerrorexplainerdemo.entity.HistoryDiagnosis;
 import com.org.codeerrorexplainerdemo.mapper.AiCallLogMapper;
+import com.org.codeerrorexplainerdemo.mapper.HistoryDiagnosisMapper;
 import com.org.codeerrorexplainerdemo.service.ErrorExplainService;
 import com.org.codeerrorexplainerdemo.service.HistoryService;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,11 +38,15 @@ class ExplainFlowIntegrationTest {
     @Autowired
     private AiCallLogMapper aiCallLogMapper;
 
+    @Autowired
+    private HistoryDiagnosisMapper diagnosisMapper;
+
     /** H2 内存库在类内共享，每个用例前清空保证计数断言独立 */
     @BeforeEach
     void cleanDb() {
         historyService.clearAll();
         aiCallLogMapper.delete(null);
+        diagnosisMapper.delete(null);
     }
 
     @Test
@@ -115,6 +122,29 @@ class ExplainFlowIntegrationTest {
         // 搜索可命中技术栈字段（该 OOM 未识别到技术栈 → 通用/未知）
         PageResult<ErrorHistory> byStack = historyService.page(1, 20, "通用/未知");
         assertThat(byStack.getTotal()).isGreaterThanOrEqualTo(1);
+    }
+
+    @Test
+    void saveDiagnosis_writesChildRows_notAppendColumn() {
+        ExplainResponse resp = explainService.explain("java.lang.OutOfMemoryError: Java heap space");
+
+        historyService.saveDiagnosis(resp.getId(), "诊断一");
+        historyService.saveDiagnosis(resp.getId(), "诊断二");
+
+        // 子表一行一条，而非单列 JSON 追加
+        List<HistoryDiagnosis> rows = diagnosisMapper.selectList(
+                new LambdaQueryWrapper<HistoryDiagnosis>().eq(HistoryDiagnosis::getHistoryId, resp.getId()));
+        assertThat(rows).hasSize(2);
+        assertThat(rows).extracting(HistoryDiagnosis::getContent).containsExactly("诊断一", "诊断二");
+
+        // detail 由子表重建 finalDiagnosis，前端契约不变
+        ErrorHistory detail = historyService.detail(resp.getId());
+        assertThat(detail.getFinalDiagnosis()).contains("诊断一").contains("诊断二");
+
+        // 删除 history 级联清理子表
+        historyService.delete(resp.getId());
+        assertThat(diagnosisMapper.selectList(new LambdaQueryWrapper<HistoryDiagnosis>()
+                .eq(HistoryDiagnosis::getHistoryId, resp.getId()))).isEmpty();
     }
 
     @Test
