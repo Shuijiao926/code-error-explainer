@@ -2,10 +2,13 @@ import axios from 'axios'
 import type {
   AiCallLog,
   ApiResponse,
+  ArchiveRequest,
   DiagnosisEntry,
   ErrorTemplate,
   ExplainResponse,
   HistoryItem,
+  KbItem,
+  KbStats,
   PageResult,
 } from '../types'
 
@@ -74,6 +77,31 @@ export async function fetchTemplates(keyword?: string): Promise<ErrorTemplate[]>
   return ensureOk(data)
 }
 
+/** 踩坑知识库检索参数（GET /api/kb，与后端契约一一对应） */
+export interface KbQuery {
+  page: number
+  size: number
+  keyword?: string
+  language?: string
+  techStack?: string
+  archived?: boolean
+  startTime?: string
+  endTime?: string
+  tag?: string
+}
+
+/** 踩坑知识库分页检索（GET /api/kb） */
+export async function fetchKb(params: KbQuery): Promise<PageResult<KbItem>> {
+  const { data } = await api.get<ApiResponse<PageResult<KbItem>>>('/kb', { params })
+  return ensureOk(data)
+}
+
+/** 沉淀/取消沉淀为踩坑档案，并可选更新标签（PUT /api/history/{id}/archive） */
+export async function archiveHistory(id: number, req: ArchiveRequest): Promise<KbItem> {
+  const { data } = await api.put<ApiResponse<KbItem>>(`/history/${id}/archive`, req)
+  return ensureOk(data)
+}
+
 /** AI 调用日志（分页/筛选） */
 export async function fetchAiLogs(params: {
   page: number
@@ -84,4 +112,55 @@ export async function fetchAiLogs(params: {
 }): Promise<PageResult<AiCallLog>> {
   const { data } = await api.get<ApiResponse<PageResult<AiCallLog>>>('/ai-logs', { params })
   return ensureOk(data)
+}
+
+/** 知识库统计查询参数（GET /api/kb/stats，与 /api/kb 筛选口径一致） */
+export interface KbStatsQuery {
+  archived?: boolean
+  keyword?: string
+  language?: string
+  techStack?: string
+  startTime?: string
+  endTime?: string
+  tag?: string
+  topN?: number
+  days?: number
+}
+
+/** 踩坑知识库统计（GET /api/kb/stats） */
+export async function fetchKbStats(params: KbStatsQuery): Promise<KbStats> {
+  const { data } = await api.get<ApiResponse<KbStats>>('/kb/stats', { params })
+  return ensureOk(data)
+}
+
+export type KbExportFormat = 'markdown' | 'csv'
+
+export interface KbExportResult {
+  blob: Blob
+  /** 服务端 Content-Disposition 提供的文件名 */
+  filename: string
+}
+
+/** 踩坑知识库导出（GET /api/kb/export），返回 Blob 供浏览器下载 */
+export async function exportKb(format: KbExportFormat, params: KbQuery): Promise<KbExportResult> {
+  const res = await api.get<Blob>('/kb/export', {
+    params: { ...params, format },
+    responseType: 'blob',
+  })
+  // 后端业务异常会以 JSON 返回（此时 content-type 为 application/json），解析后抛出
+  const contentType = res.headers['content-type'] as string | undefined
+  if (contentType?.includes('application/json')) {
+    let msg = '导出失败'
+    try {
+      const parsed = JSON.parse(await res.data.text())
+      if (parsed?.message) msg = parsed.message
+    } catch {
+      /* 保持默认文案 */
+    }
+    throw new Error(msg)
+  }
+  const disposition = res.headers['content-disposition'] as string | undefined
+  const matched = disposition?.match(/filename="?([^"]+)"?/)
+  const fallback = `kb-export-${new Date().toISOString().slice(0, 10)}.${format === 'csv' ? 'csv' : 'md'}`
+  return { blob: res.data, filename: matched?.[1] ?? fallback }
 }

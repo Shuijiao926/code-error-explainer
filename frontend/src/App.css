@@ -1,14 +1,84 @@
+/* ===== 全局基础 ===== */
 * {
   box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
+/* ===== 代码字体（堆栈 / 修复模板） ===== */
 code,
-pre {
+pre,
+.cee-mono {
   font-family: 'JetBrains Mono', Consolas, Monaco, 'Courier New', monospace;
+}
+
+/* ===== 布局 ===== */
+/* 内容区背景跟随 token colorBgLayout（深浅主题一致，页面呼吸感） */
+.cee-layout .cee-content {
+  background: transparent;
+}
+
+/* 页面统一布局容器：水平居中 + 上下呼吸感（替代各页重复的 maxWidth/margin） */
+.cee-page-container {
+  width: 100%;
+  margin: 0 auto;
+  padding: 4px 0 24px;
+}
+
+/* 移动端收窄内边距，充分利用小屏宽度 */
+@media (max-width: 768px) {
+  .cee-content {
+    padding: 16px !important;
+  }
+  .cee-page-container {
+    padding: 0 0 16px;
+  }
+}
+
+/* ===== 代码块（修复模板 / 原始堆栈） ===== */
+.cee-code-block {
+  margin: 4px 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.04);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow: auto;
+}
+
+/* 深色模式下的代码块底色（antd 暗色面板为 #141414 系列，用亮一点的灰衬托） */
+.cee-dark .cee-code-block {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ===== 滚动条（WebKit，深浅主题通用细滚动条） ===== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: rgba(128, 128, 128, 0.4);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.6);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
 }

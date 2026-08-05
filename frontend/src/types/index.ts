@@ -44,6 +44,23 @@ export interface DiagnosisEntry {
   content: string
 }
 
+/** 历史 / 踩坑知识库详情弹窗的展示态（前端聚合，非后端 DTO） */
+export interface DetailState {
+  id: number
+  errorType: string
+  /** 一句话概要（对非技术读者友好） */
+  summary: string
+  language: string
+  techStack: string[]
+  tags: string[]
+  isArchived: boolean
+  /** 原始异常堆栈（可长文本，弹窗内滚动查看） */
+  stackTrace: string
+  createdAt: string
+  report: PreTriageReport
+  entries: DiagnosisEntry[]
+}
+
 /** AI 调用日志 */
 export interface AiCallLog {
   id: number
@@ -76,6 +93,53 @@ export interface PageResult<T> {
   total: number
   page: number
   size: number
+}
+
+/** 踩坑知识库列表项（GET /api/kb） */
+export interface KbItem {
+  id: number
+  errorType: string
+  language: string | null
+  techStack: string | null
+  summary: string
+  tags: string | null
+  isArchived: boolean
+  createdAt: string
+  /** "[]" 表示有回填诊断（前端 truthy 判「已诊断」），null 表示无 */
+  finalDiagnosis: string | null
+}
+
+/** PUT /api/history/{id}/archive 请求体：沉淀/取消沉淀为踩坑档案，并可选更新标签 */
+export interface ArchiveRequest {
+  archived: boolean
+  /** 逗号分隔标签；不传保持原值，传空串清空 */
+  tags?: string
+}
+
+/** 统计分布项（异常类型/语言/技术栈分布通用） */
+export interface NameCount {
+  name: string
+  count: number
+}
+
+/** 趋势点：某天新增数量（date 为 yyyy-MM-dd） */
+export interface TrendPoint {
+  date: string
+  count: number
+}
+
+/** GET /api/kb/stats 统计响应 */
+export interface KbStats {
+  /** 命中筛选条件的记录总数 */
+  total: number
+  /** 异常类型 TopN（默认 10） */
+  errorTypeTop: NameCount[]
+  /** 按 language 分布 */
+  languageDist: NameCount[]
+  /** 按 tech_stack 分布（逗号分隔拆开后逐项计数） */
+  techStackDist: NameCount[]
+  /** 近 N 天新增趋势（默认近 30 天，零值天已补齐） */
+  trend: TrendPoint[]
 }
 
 export interface ApiResponse<T> {

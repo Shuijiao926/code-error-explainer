@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { App as AntdApp, Card, Space, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { fetchAiLogs } from '../services/api'
+import PageContainer from '../components/PageContainer'
 import type { AiCallLog } from '../types'
 
 const PAGE_SIZE = 20
@@ -96,7 +97,7 @@ export default function LogsPage() {
   ]
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+    <PageContainer maxWidth={1200}>
       <Card title="🛰️ AI 调用日志">
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -121,6 +122,6 @@ export default function LogsPage() {
           />
         </Space>
       </Card>
-    </div>
+    </PageContainer>
   )
 }

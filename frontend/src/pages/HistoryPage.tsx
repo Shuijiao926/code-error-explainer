@@ -3,12 +3,9 @@ import {
   App as AntdApp,
   Button,
   Card,
-  Divider,
-  Drawer,
   Empty,
   Input,
   List,
-  Pagination,
   Popconfirm,
   Segmented,
   Space,
@@ -20,24 +17,16 @@ import {
   backfillDiagnosis,
   clearHistoryAll,
   fetchHistory,
-  fetchHistoryDetail,
   removeHistory,
 } from '../services/api'
 import type { HistoryStatus } from '../services/api'
-import ReportBody from '../components/ReportBody'
-import type { DiagnosisEntry, HistoryItem, PreTriageReport } from '../types'
+import DetailModal from '../components/DetailModal'
+import PageContainer from '../components/PageContainer'
+import PaginationBar from '../components/PaginationBar'
+import { splitCsv, useHistoryDetail } from '../hooks/useHistoryDetail'
+import type { HistoryItem } from '../types'
 
 const PAGE_SIZE = 10
-
-interface DetailState {
-  id: number
-  errorType: string
-  language: string
-  techStack: string[]
-  createdAt: string
-  report: PreTriageReport
-  entries: DiagnosisEntry[]
-}
 
 export default function HistoryPage() {
   const { message } = AntdApp.useApp()
@@ -48,9 +37,10 @@ export default function HistoryPage() {
   const [status, setStatus] = useState<HistoryStatus>('all')
   const [loading, setLoading] = useState(false)
 
-  // 详情抽屉状态
-  const [detail, setDetail] = useState<DetailState | null>(null)
-  const [detailLoading, setDetailLoading] = useState(false)
+  // 详情弹窗（共享 hook：加载/解析/关闭）
+  const { detail, detailLoading, openDetail, patchDetail, closeDetail } = useHistoryDetail()
+
+  // 追加诊断输入区（仅历史页）
   const [appendText, setAppendText] = useState('')
   const [appending, setAppending] = useState(false)
 
@@ -58,8 +48,17 @@ export default function HistoryPage() {
     setLoading(true)
     try {
       const res = await fetchHistory({ page: p, size: PAGE_SIZE, keyword: kw || undefined, status: st })
-      setRecords(res.records)
-      setTotal(res.total)
+      // 删除后当前页可能越界，回退到最后一页
+      if (res.records.length === 0 && res.total > 0 && p > 1) {
+        const last = Math.max(1, Math.ceil(res.total / PAGE_SIZE))
+        setPage(last)
+        const retry = await fetchHistory({ page: last, size: PAGE_SIZE, keyword: kw || undefined, status: st })
+        setRecords(retry.records)
+        setTotal(retry.total)
+      } else {
+        setRecords(res.records)
+        setTotal(res.total)
+      }
     } catch (e) {
       message.error((e as Error).message)
     } finally {
@@ -78,46 +77,6 @@ export default function HistoryPage() {
     load(1, value)
   }
 
-  const openDetail = async (item: HistoryItem) => {
-    setDetailLoading(true)
-    setDetail(null)
-    try {
-      const d = await fetchHistoryDetail(item.id)
-      let report: PreTriageReport | null = null
-      try {
-        report = JSON.parse(d.preReport || d.explanation)
-      } catch {
-        report = null
-      }
-      let entries: DiagnosisEntry[] = []
-      try {
-        entries = d.finalDiagnosis ? JSON.parse(d.finalDiagnosis) : []
-      } catch {
-        entries = []
-      }
-      setDetail({
-        id: d.id,
-        errorType: d.errorType,
-        language: d.language || '未知',
-        techStack: d.techStack
-          ? d.techStack.split(',').map((s) => s.trim()).filter(Boolean)
-          : [],
-        createdAt: d.createdAt,
-        report:
-          report ?? {
-            personReport: { summary: d.summary, layer: '', misuse: '', nextStep: '' },
-            handoff: { techStack: [], suspectedPoints: [], checkList: [], rawError: d.stackTrace },
-          },
-        entries,
-      })
-      setAppendText('')
-    } catch (e) {
-      message.error((e as Error).message)
-    } finally {
-      setDetailLoading(false)
-    }
-  }
-
   const submitAppend = async () => {
     const text = appendText.trim()
     if (!text) {
@@ -128,7 +87,7 @@ export default function HistoryPage() {
     setAppending(true)
     try {
       const updated = await backfillDiagnosis(detail.id, text)
-      setDetail((prev) => (prev ? { ...prev, entries: updated } : prev))
+      patchDetail({ entries: updated })
       setAppendText('')
       message.success('已追加诊断记录')
       load(page, keyword)
@@ -143,7 +102,7 @@ export default function HistoryPage() {
     try {
       await removeHistory(id)
       message.success('已删除')
-      if (detail?.id === id) setDetail(null)
+      if (detail?.id === id) closeDetail()
       load(page, keyword)
     } catch (e) {
       message.error((e as Error).message)
@@ -156,17 +115,14 @@ export default function HistoryPage() {
       message.success('已清空全部历史')
       setRecords([])
       setTotal(0)
-      setDetail(null)
+      closeDetail()
     } catch (e) {
       message.error((e as Error).message)
     }
   }
 
-  const techStackTags = (raw: string | null) =>
-    (raw ?? '').split(',').map((s) => s.trim()).filter(Boolean)
-
   return (
-    <div style={{ maxWidth: 960, margin: '0 auto' }}>
+    <PageContainer>
       <Card
         title="📋 历史记录"
         extra={
@@ -208,7 +164,7 @@ export default function HistoryPage() {
                       key="view"
                       size="small"
                       icon={<EyeOutlined />}
-                      onClick={() => openDetail(item)}
+                      onClick={() => openDetail(item.id)}
                     >
                       详情
                     </Button>,
@@ -237,9 +193,9 @@ export default function HistoryPage() {
                     description={
                       <>
                         <div>{item.summary}</div>
-                        {techStackTags(item.techStack).length > 0 && (
+                        {splitCsv(item.techStack).length > 0 && (
                           <div style={{ marginTop: 4 }}>
-                            {techStackTags(item.techStack).map((s, i) => (
+                            {splitCsv(item.techStack).map((s, i) => (
                               <Tag key={i} color="blue" style={{ marginRight: 4, marginBottom: 4 }}>
                                 {s}
                               </Tag>
@@ -257,84 +213,32 @@ export default function HistoryPage() {
             />
           )}
 
-          {total > PAGE_SIZE && (
-            <Pagination
-              current={page}
-              pageSize={PAGE_SIZE}
+          {total > 0 && (
+            <PaginationBar
               total={total}
+              page={page}
+              pageSize={PAGE_SIZE}
               onChange={(p) => {
                 setPage(p)
                 load(p, keyword)
               }}
-              showSizeChanger={false}
-              size="small"
             />
           )}
         </Space>
       </Card>
 
-      {/* 详情抽屉 */}
-      <Drawer
-        title={`🔍 ${detail?.errorType ?? '历史详情'}`}
-        width={420}
+      {/* 详情弹窗（居中 Modal，历史页带追加诊断区） */}
+      <DetailModal
         open={detail !== null}
-        onClose={() => setDetail(null)}
-      >
-        {detailLoading || !detail ? (
-          <Empty description="加载中…" />
-        ) : (
-          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-            <div>
-              <Tag color="purple" style={{ marginRight: 4, marginBottom: 4 }}>
-                {detail.language}
-              </Tag>
-              {detail.techStack.map((s, i) => (
-                <Tag key={i} color="blue" style={{ marginRight: 4, marginBottom: 4 }}>
-                  {s}
-                </Tag>
-              ))}
-              <Typography.Text type="secondary" style={{ fontSize: 12, marginLeft: 4 }}>
-                {detail.createdAt}
-              </Typography.Text>
-            </div>
-
-            <ReportBody person={detail.report.personReport} handoff={detail.report.handoff} />
-
-            <Divider />
-            <Typography.Title level={5}>🤝 项目 AI 诊断记录</Typography.Title>
-            {detail.entries.length === 0 ? (
-              <Typography.Text type="secondary">暂无回填，粘贴项目 AI 的结论到下方。</Typography.Text>
-            ) : (
-              <List
-                size="small"
-                dataSource={detail.entries}
-                renderItem={(r) => (
-                  <List.Item style={{ padding: '6px 0', alignItems: 'flex-start' }}>
-                    <Typography.Text type="secondary" style={{ fontSize: 12, marginRight: 8, flexShrink: 0 }}>
-                      [{r.ts}]
-                    </Typography.Text>
-                    <span style={{ fontSize: 13 }}>{r.content}</span>
-                  </List.Item>
-                )}
-              />
-            )}
-            <Input.TextArea
-              rows={3}
-              placeholder="粘贴项目 AI 给出的最终诊断结论…"
-              value={appendText}
-              onChange={(e) => setAppendText(e.target.value)}
-            />
-            <Button
-              type="primary"
-              loading={appending}
-              onClick={submitAppend}
-              style={{ alignSelf: 'flex-end' }}
-            >
-              追加诊断
-            </Button>
-          </Space>
-        )}
-      </Drawer>
-    </div>
+        loading={detailLoading}
+        detail={detail}
+        onClose={closeDetail}
+        titlePrefix="🔍"
+        appendText={appendText}
+        onAppendTextChange={setAppendText}
+        appending={appending}
+        onAppend={submitAppend}
+      />
+    </PageContainer>
   )
 }

@@ -1,9 +1,31 @@
-import { useState } from 'react'
-import { Alert, App as AntdApp, Button, Card, Empty, Input, Space, Tag } from 'antd'
-import { CheckCircleOutlined, WarningOutlined } from '@ant-design/icons'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import {
+  Alert,
+  App as AntdApp,
+  Button,
+  Card,
+  Col,
+  Empty,
+  Input,
+  Row,
+  Skeleton,
+  Space,
+  Steps,
+  Tag,
+  Typography,
+} from 'antd'
+import {
+  ArrowRightOutlined,
+  CheckCircleOutlined,
+  CopyOutlined,
+  FileSearchOutlined,
+  WarningOutlined,
+} from '@ant-design/icons'
 import ExplanationCard from '../components/ExplanationCard'
-import { explainStack } from '../services/api'
-import type { ExplainResponse } from '../types'
+import PageContainer from '../components/PageContainer'
+import { explainStack, fetchHistory, fetchTemplates } from '../services/api'
+import type { ErrorTemplate, ExplainResponse, HistoryItem } from '../types'
 
 const { TextArea } = Input
 
@@ -14,10 +36,17 @@ const SAMPLE_STACK =
 
 export default function Home() {
   const { message } = AntdApp.useApp()
+  const navigate = useNavigate()
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<ExplainResponse | null>(null)
   const [error, setError] = useState('')
+
+  // 底部增强区：常见异常速查前 6 条 + 最近记录前 3 条（复用现有接口，失败静默降级）
+  const [templates, setTemplates] = useState<ErrorTemplate[]>([])
+  const [templatesLoading, setTemplatesLoading] = useState(true)
+  const [recent, setRecent] = useState<HistoryItem[]>([])
+  const [recentLoading, setRecentLoading] = useState(true)
 
   const looksLikeJavaStack = /(Exception|Error|Caused by|^\s*at\s)/m.test(input)
 
@@ -46,8 +75,45 @@ export default function Home() {
     setError('')
   }
 
+  useEffect(() => {
+    let alive = true
+    fetchTemplates()
+      .then((list) => {
+        if (alive) setTemplates((list || []).slice(0, 6))
+      })
+      .catch(() => {
+        if (alive) setTemplates([])
+      })
+      .finally(() => {
+        if (alive) setTemplatesLoading(false)
+      })
+    fetchHistory({ page: 1, size: 3 })
+      .then((res) => {
+        if (alive) setRecent(res?.records || [])
+      })
+      .catch(() => {
+        if (alive) setRecent([])
+      })
+      .finally(() => {
+        if (alive) setRecentLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  // 取模板卡片的常见原因首条作副标题
+  const templateLead = (t: ErrorTemplate): string => {
+    try {
+      const arr = t.causeTop3 ? JSON.parse(t.causeTop3) : []
+      return Array.isArray(arr) && arr.length > 0 ? String(arr[0]) : '点击查看常见原因与修复模板'
+    } catch {
+      return '点击查看常见原因与修复模板'
+    }
+  }
+
   return (
-    <div style={{ maxWidth: 960, margin: '0 auto' }}>
+    <PageContainer>
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
         <Card title="📥 粘贴 Java 异常堆栈" size="small">
           <TextArea
@@ -103,7 +169,112 @@ export default function Home() {
         )}
 
         {result && <ExplanationCard result={result} />}
+
+        <Card
+          title="📚 常见异常速查"
+          size="small"
+          extra={
+            <Button type="link" size="small" onClick={() => navigate('/knowledge')}>
+              查看全部 <ArrowRightOutlined />
+            </Button>
+          }
+        >
+          {templatesLoading ? (
+            <Skeleton active paragraph={{ rows: 2 }} />
+          ) : templates.length === 0 ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无内置卡片" style={{ padding: 16 }} />
+          ) : (
+            <Row gutter={[12, 12]}>
+              {templates.map((t) => (
+                <Col key={t.id} xs={24} sm={12} md={8}>
+                  <Card size="small" hoverable onClick={() => navigate(`/knowledge?keyword=${encodeURIComponent(t.errorType)}`)}>
+                    <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                      <Space size={6} wrap>
+                        <Typography.Text strong>{t.errorType}</Typography.Text>
+                        {t.category && (
+                          <Tag color="blue" style={{ marginInlineEnd: 0 }}>
+                            {t.category}
+                          </Tag>
+                        )}
+                      </Space>
+                      <Typography.Text
+                        type="secondary"
+                        style={{ fontSize: 12 }}
+                        ellipsis={{ tooltip: templateLead(t) }}
+                      >
+                        {templateLead(t)}
+                      </Typography.Text>
+                    </Space>
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+          )}
+        </Card>
+
+        <Card title="🚀 三步使用引导" size="small">
+          <Steps
+            current={-1}
+            items={[
+              {
+                title: '贴堆栈',
+                description: '把报错堆栈粘贴到上方输入框，点击「生成前置分诊报告」',
+                icon: <FileSearchOutlined />,
+              },
+              {
+                title: '看人话报告',
+                description: '生成「人话版」前置分诊报告，非 IT 也看得懂问题在哪、该找谁',
+                icon: <CheckCircleOutlined />,
+              },
+              {
+                title: '复制诊断包给项目 AI',
+                description: '复制 handoff 诊断包，交给项目 AI 做最终诊断与修复建议',
+                icon: <CopyOutlined />,
+              },
+            ]}
+          />
+        </Card>
+
+        <Card
+          title="🕘 最近记录"
+          size="small"
+          extra={
+            <Button type="link" size="small" onClick={() => navigate('/history')}>
+              查看全部 <ArrowRightOutlined />
+            </Button>
+          }
+        >
+          {recentLoading ? (
+            <Skeleton active paragraph={{ rows: 1 }} />
+          ) : recent.length === 0 ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无诊断记录" style={{ padding: 16 }} />
+          ) : (
+            <Row gutter={[12, 12]}>
+              {recent.map((item) => (
+                <Col key={item.id} xs={24} md={8}>
+                  <Card size="small" hoverable onClick={() => navigate('/history')}>
+                    <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                      <Typography.Text strong ellipsis>
+                        {item.errorType}
+                      </Typography.Text>
+                      <Typography.Paragraph
+                        type="secondary"
+                        ellipsis={{ rows: 1 }}
+                        style={{ marginBottom: 0, fontSize: 12 }}
+                      >
+                        {item.summary}
+                      </Typography.Paragraph>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        {item.createdAt}
+                      </Typography.Text>
+                    </Space>
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+          )}
+        </Card>
       </Space>
-    </div>
+    </PageContainer>
   )
 }
