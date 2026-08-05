@@ -41,3 +41,8 @@ frontend/*.local
 ### Local secrets (never commit) ###
 .env
 .env.local
+
+### Runtime environment artifacts (never commit) ###
+.agent_context/
+.claude/
+.multica/
