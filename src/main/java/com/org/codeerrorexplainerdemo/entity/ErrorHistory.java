@@ -44,6 +44,12 @@ public class ErrorHistory {
     /** 请求来源 IP */
     private String sourceIp;
 
+    /** 是否沉淀为踩坑档案（V1.6，0/1） */
+    private Boolean isArchived;
+
+    /** 踩坑标签，逗号分隔（V1.6，可空） */
+    private String tags;
+
     /** 创建时间（由数据库默认值生成） */
     private LocalDateTime createdAt;
 }

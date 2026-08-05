@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS error_history (
   final_diagnosis  CLOB,
   summary          VARCHAR(500) NOT NULL,
   source_ip        VARCHAR(50),
+  is_archived      TINYINT      DEFAULT 0 COMMENT '是否沉淀为踩坑档案',
+  tags             VARCHAR(500) COMMENT '逗号分隔踩坑标签',
   created_at       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
 );
 
