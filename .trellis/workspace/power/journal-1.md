@@ -47,3 +47,24 @@ MEDIUMTEXT 升级；final_diagnosis 追加拆 history_diagnosis 子表；ai_call
 ### Status
 
 [OK] **Completed**
+
+
+## Session 3: WS-38 软著后端源程序整理 + V1.3 checklist/verification wrap-up
+
+**Date**: 2026-08-06
+**Task**: WS-38 软著后端源程序整理 + V1.3 checklist/verification wrap-up
+**Branch**: `main`
+
+### Summary
+
+Completed two independent items: (1) WS-38: generated copyright source document for all 43 backend Java files into D:/Project/docs (1758 lines, 36 pages, comments/blanks stripped), posted Multica result comment. (2) V1.3 enhancement: trellis-check found & fixed 3 issues (application.yaml model/base-url revert, .gitignore CLAUDE.md entry), spec updated with V1.3 knowledge card / encoding / config consistency conventions.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fda1dcc` | (see git log) |
+
+### Status
+
+[OK] **Completed**
