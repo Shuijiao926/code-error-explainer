@@ -102,3 +102,31 @@ Questions to answer:
 - 服务端规则表（类名前缀 → 框架标签）见 `service/TechStackDetector.java`；前端通过 `POST /api/detect`
   预填选择器，**不要在前后端重复实现识别逻辑**。
 - 规则注意优先级：`org.springframework.boot` 必须先于 `org.springframework`（命中 Boot 不再标 Spring）。
+
+---
+
+## V1.3 实现经验（2026-08-03 沉淀）
+
+### 知识卡片表（error_template）
+
+- 建表：`sql/init.sql` 包含 `error_template` 建表语句；种子数据文件 `sql/seed-templates.sql`（幂等 INSERT IGNORE）。
+- 实体：`entity/ErrorTemplate.java`，轻量 POJO，`cause_top3` 存 JSON 数组，`fix_template` 存代码模板。
+- 接口：`GET /api/templates?keyword=`（Keyword 同时匹配 error_type + category），不调 AI，离线可用。
+- 种子数据覆盖 ≥7 类：NullPointerException / ClassCastException / ConcurrentModificationException /
+  SQLException / OutOfMemoryError / StackOverflowError / TimeoutException / IllegalArgumentException。
+- 每类卡片包含：error_type（唯一）、category、cause_top3(JSON 数组)、fix_template、hierarchy（继承链）。
+
+### 中文编码陷阱（Windows）
+
+- **`spring.sql.init.encoding: UTF-8` 必须显式设置**。Windows 默认编码非 UTF-8，不设此项会导致
+  `seed-templates.sql` 中的中文（如 category "空指针"、fix_template 中文注释）读入后乱码，
+  测试中搜索中文关键字匹配不到任何行。
+- 测试配置（`application-test.yaml`）同样需要此设置。
+- H2 内存库模式下同样受影响——H2 不自动推断脚本编码。
+
+### application.yaml 配置一致性
+
+- `application.yaml` 中 `ai.model` 和 `ai.base-url` 的值必须与 Java 默认值（`AiProperties.java`）
+  保持一致。随意修改为无效值（如不存在的模型名、错误的 API 端点）会导致运行时 AI 调用静默失败，
+  所有请求进入 fallback 路径。
+- 任何运行时配置变更都应先在 `AiProperties.java` 默认值中同步调整，再改 yaml，避免默认值与现实脱节。

@@ -46,3 +46,4 @@ frontend/*.local
 .agent_context/
 .claude/
 .multica/
+CLAUDE.md
