@@ -3,9 +3,9 @@ package com.org.codeerrorexplainerdemo.service.ai;
 import java.util.List;
 
 /**
- * AI 接入层抽象，支持切换 OpenAI / DeepSeek / 本地模型 / Mock。
+ * 为同一份异常堆栈生成前置分诊报告，来源可以是外部模型或本地规则库。
  */
-public interface AIService {
+public interface TriageReportProvider {
 
     /**
      * 前置分诊：把堆栈转成双段式报告（人话版 + 项目AI诊断包）。

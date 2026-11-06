@@ -6,9 +6,9 @@ import com.org.codeerrorexplainerdemo.dto.Handoff;
 import com.org.codeerrorexplainerdemo.dto.PreTriageReport;
 import com.org.codeerrorexplainerdemo.entity.ErrorHistory;
 import com.org.codeerrorexplainerdemo.mapper.ErrorHistoryMapper;
-import com.org.codeerrorexplainerdemo.service.ai.AIService;
 import com.org.codeerrorexplainerdemo.service.ai.AiCallOutcome;
 import com.org.codeerrorexplainerdemo.service.ai.AiCallRecorder;
+import com.org.codeerrorexplainerdemo.service.ai.TriageReportProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
@@ -30,7 +30,7 @@ public class ErrorExplainService {
     private static final Pattern ERROR_PATTERN = Pattern.compile("([\\w.]+(?:Exception|Error))");
     private static final int SUMMARY_MAX = 300;
 
-    private final AIService aiService;
+    private final TriageReportProvider triageReportProvider;
     private final ErrorHistoryMapper historyMapper;
     private final ObjectMapper objectMapper;
     private final AiCallRecorder aiCallRecorder;
@@ -44,7 +44,7 @@ public class ErrorExplainService {
         String errorType = extractErrorType(stackTrace, language);
         List<String> techStack = TechStackDetector.detect(stackTrace);
 
-        AiCallOutcome outcome = aiService.explain(stackTrace, techStack, language);
+        AiCallOutcome outcome = triageReportProvider.explain(stackTrace, techStack, language);
         PreTriageReport report = outcome.report();
         // 保证 handoff 与最终技术栈/原始堆栈一致
         if (report.getHandoff() == null) {
@@ -71,7 +71,7 @@ public class ErrorExplainService {
         history.setTechStack(String.join(", ", techStack));
         history.setStackTrace(stackTrace);
         history.setPreReport(preReportJson);
-        // explanation 为 V1.0 遗留列（NOT NULL），与 pre_report 保持同内容以兼容旧表
+        // explanation 为历史遗留列（NOT NULL），与 pre_report 写入同一份内容，兼容旧表结构
         history.setExplanation(preReportJson);
         history.setSummary(truncate(summary == null || summary.isBlank() ? errorType : summary, SUMMARY_MAX));
         try {

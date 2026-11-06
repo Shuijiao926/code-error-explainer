@@ -47,3 +47,4 @@ frontend/*.local
 .claude/
 .multica/
 CLAUDE.md
+.softcopyright

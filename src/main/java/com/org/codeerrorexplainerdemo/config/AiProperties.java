@@ -12,10 +12,10 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "ai")
 public class AiProperties {
 
-    /** openai | deepseek | claude | ollama | mock */
+    /** openai | deepseek | claude | ollama | local（内置规则库） */
     private String provider = "deepseek";
 
-    /** API Key，为空时自动降级为 mock 模式 */
+    /** API Key，为空时使用内置规则库分诊 */
     private String apiKey = "";
 
     private String model = "deepseek-chat";

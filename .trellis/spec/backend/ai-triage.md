@@ -2,6 +2,14 @@
 
 > 产品定位：**前置分诊**——工具不做最终项目级诊断，产出人话说明 + 交给项目 AI 的诊断包。
 
+## Current provider contract
+
+`TriageReportProvider` has two implementations: `LocalRuleTriageProvider` and
+`OpenAiCompatibleTriageProvider`. The OpenAI-compatible provider parses the
+report and checks that it has a displayable summary before marking a call
+successful. Persist the final status once per request so an unusable reply can
+fall back and still link its log to the saved report.
+
 ## 双段式报告契约
 
 `POST /api/explain` 返回 `PreTriageReport`：

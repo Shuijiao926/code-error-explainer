@@ -31,7 +31,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * 核心接口：堆栈翻译 + 历史记录。
+ * 对外接口：前置分诊、历史记录、踩坑知识库与调用日志。
  */
 @RestController
 @RequestMapping("/api")
@@ -78,13 +78,13 @@ public class ErrorExplainController {
         return Result.ok(historyService.saveDiagnosis(id, request.getDiagnosis()));
     }
 
-    /** 沉淀/取消沉淀为踩坑档案，并可选更新标签（V1.6） */
+    /** 沉淀/取消沉淀为踩坑档案，可同时更新标签 */
     @PutMapping("/history/{id}/archive")
     public Result<ErrorHistory> archive(@PathVariable Long id, @RequestBody ArchiveRequest request) {
         return Result.ok(historyService.archive(id, request.getArchived(), request.getTags()));
     }
 
-    /** 踩坑档案知识库检索（V1.6，新增，不破坏 /api/history） */
+    /** 踩坑知识库检索（独立于 /api/history，筛选条件更丰富） */
     @GetMapping("/kb")
     public Result<PageResult<ErrorHistory>> kb(@RequestParam(defaultValue = "1") long page,
                                                @RequestParam(defaultValue = "20") long size,
@@ -100,7 +100,7 @@ public class ErrorExplainController {
     }
 
     /**
-     * 踩坑知识库统计（V1.6）。
+     * 踩坑知识库统计。
      * 异常类型 TopN（topN 默认 10）+ 语言/技术栈分布 + 近 N 天新增趋势（days 默认 30）。
      * 筛选参数与 /api/kb 一致，archived 为 true 时只统计已沉淀档案。
      */
@@ -119,7 +119,7 @@ public class ErrorExplainController {
     }
 
     /**
-     * 踩坑知识库导出（V1.6）。format=markdown|csv，复用检索筛选参数，附件下载。
+     * 踩坑知识库导出。format=markdown|csv，复用检索筛选参数，以附件形式下载。
      * csv 为 UTF-8 带 BOM，Excel 可直接打开。
      */
     @GetMapping("/kb/export")

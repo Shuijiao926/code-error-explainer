@@ -29,13 +29,13 @@ public class ErrorHistory {
     /** 原始堆栈（用户输入的） */
     private String stackTrace;
 
-    /** AI 返回的完整解释 (JSON)，V1.0 遗留字段 */
+    /** AI 返回的完整解释 (JSON)，历史遗留字段，与 pre_report 同内容 */
     private String explanation;
 
-    /** 前置分诊报告 JSON（V1.1） */
+    /** 前置分诊报告 JSON */
     private String preReport;
 
-    /** 项目AI回填的最终诊断（V1.1） */
+    /** 项目 AI 回填的最终诊断（历史遗留列，当前由 history_diagnosis 子表承载） */
     private String finalDiagnosis;
 
     /** 一句话概要，列表展示用 */
@@ -44,10 +44,10 @@ public class ErrorHistory {
     /** 请求来源 IP */
     private String sourceIp;
 
-    /** 是否沉淀为踩坑档案（V1.6，0/1） */
+    /** 是否沉淀为踩坑档案（0/1） */
     private Boolean isArchived;
 
-    /** 踩坑标签，逗号分隔（V1.6，可空） */
+    /** 踩坑标签，逗号分隔（可空） */
     private String tags;
 
     /** 创建时间（由数据库默认值生成） */

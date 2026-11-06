@@ -14,7 +14,7 @@ const statusColor = (status: string | null) => {
 }
 
 const providerLabel = (provider: string | null) => {
-  if (provider === 'mock') return 'mock（模板）'
+  if (provider === 'local') return '内置规则库'
   return provider || '—'
 }
 
@@ -54,7 +54,7 @@ export default function LogsPage() {
       title: 'Provider',
       dataIndex: 'provider',
       width: 120,
-      render: (v: string | null) => <Tag color={v === 'mock' ? 'default' : 'blue'}>{providerLabel(v)}</Tag>,
+      render: (v: string | null) => <Tag color={v === 'local' ? 'default' : 'blue'}>{providerLabel(v)}</Tag>,
     },
     { title: '模型', dataIndex: 'model', width: 140, render: (v: string | null) => v || '—' },
     {

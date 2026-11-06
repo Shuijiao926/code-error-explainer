@@ -8,6 +8,7 @@ import com.org.codeerrorexplainerdemo.entity.AiCallLog;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -21,7 +22,7 @@ import java.util.Map;
  * 按「分诊专家」角色输出双段式前置分诊报告。
  */
 @Slf4j
-public class OpenAiCompatAIService implements AIService {
+public class OpenAiCompatibleTriageProvider implements TriageReportProvider {
 
     private String systemPrompt(String language) {
         String role = switch (language == null ? "" : language) {
@@ -68,7 +69,7 @@ public class OpenAiCompatAIService implements AIService {
     private final AiCallRecorder recorder;
     private final RestClient restClient;
 
-    public OpenAiCompatAIService(AiProperties props, ObjectMapper objectMapper, AiCallRecorder recorder) {
+    public OpenAiCompatibleTriageProvider(AiProperties props, ObjectMapper objectMapper, AiCallRecorder recorder) {
         this.props = props;
         this.objectMapper = objectMapper;
         this.recorder = recorder;
@@ -101,6 +102,7 @@ public class OpenAiCompatAIService implements AIService {
         callLog.setProvider(props.getProvider());
         callLog.setModel(props.getModel());
         callLog.setInputExcerpt(AiCallRecorder.excerpt(stackTrace));
+        PreTriageReport report;
         try {
             String raw = restClient.post()
                     .uri("/chat/completions")
@@ -119,20 +121,20 @@ public class OpenAiCompatAIService implements AIService {
             }
             int promptTokens = root.at("/usage/prompt_tokens").asInt(-1);
             int completionTokens = root.at("/usage/completion_tokens").asInt(-1);
-            callLog.setStatus("success");
             callLog.setPromptTokens(promptTokens >= 0 ? promptTokens : null);
             callLog.setCompletionTokens(completionTokens >= 0 ? completionTokens : null);
-            callLog.setDurationMs(AiCallRecorder.elapsedMs(start));
-            Long logId = recorder.record(callLog);
-            return new AiCallOutcome(finalizeReport(parseReport(content), stackTrace, techStack), logId);
+            report = finalizeReport(parseReport(content), stackTrace, techStack);
+            callLog.setStatus("success");
         } catch (Exception e) {
             log.warn("AI 调用失败，返回兜底分诊：{}", e.getMessage());
             callLog.setStatus("fallback");
             callLog.setErrorMessage(truncate(e.getMessage(), 1000));
-            callLog.setDurationMs(AiCallRecorder.elapsedMs(start));
-            Long logId = recorder.record(callLog);
-            return new AiCallOutcome(fallback(stackTrace, techStack), logId);
+            report = fallback(stackTrace, techStack);
         }
+        // 确定报告结果后再写入日志，同一次请求只保留一条最终状态。
+        callLog.setDurationMs(AiCallRecorder.elapsedMs(start));
+        Long logId = recorder.record(callLog);
+        return new AiCallOutcome(report, logId);
     }
 
     private String truncate(String s, int max) {
@@ -142,13 +144,18 @@ public class OpenAiCompatAIService implements AIService {
         return s.length() <= max ? s : s.substring(0, max);
     }
 
-    /** 解析 AI 返回的 JSON（剥离可能存在的 markdown 围栏），并统一覆盖技术栈与原始堆栈 */
+    /** 解析模型返回的 JSON，至少要能显示一句话概要。 */
     private PreTriageReport parseReport(String content) throws Exception {
         String text = content.trim();
         if (text.startsWith("```")) {
             text = text.replaceFirst("^```[a-zA-Z]*\\s*", "").replaceFirst("```\\s*$", "").trim();
         }
-        return objectMapper.readValue(text, PreTriageReport.class);
+        PreTriageReport report = objectMapper.readValue(text, PreTriageReport.class);
+        if (report == null || report.getPersonReport() == null
+                || !StringUtils.hasText(report.getPersonReport().getSummary())) {
+            throw new IllegalStateException("AI 未返回有效的人话版概要");
+        }
+        return report;
     }
 
     /** 保证 handoff 中的技术栈与原始堆栈始终与最终值一致 */

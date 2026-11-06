@@ -1,29 +1,38 @@
 package com.org.codeerrorexplainerdemo;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.org.codeerrorexplainerdemo.config.AiProperties;
 import com.org.codeerrorexplainerdemo.dto.DiagnosisEntry;
 import com.org.codeerrorexplainerdemo.dto.ExplainResponse;
 import com.org.codeerrorexplainerdemo.dto.PageResult;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.org.codeerrorexplainerdemo.entity.AiCallLog;
 import com.org.codeerrorexplainerdemo.entity.ErrorHistory;
 import com.org.codeerrorexplainerdemo.entity.HistoryDiagnosis;
 import com.org.codeerrorexplainerdemo.mapper.AiCallLogMapper;
+import com.org.codeerrorexplainerdemo.mapper.ErrorHistoryMapper;
 import com.org.codeerrorexplainerdemo.mapper.HistoryDiagnosisMapper;
 import com.org.codeerrorexplainerdemo.service.ErrorExplainService;
 import com.org.codeerrorexplainerdemo.service.HistoryService;
+import com.org.codeerrorexplainerdemo.service.ai.AiCallRecorder;
+import com.org.codeerrorexplainerdemo.service.ai.OpenAiCompatibleTriageProvider;
+import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import tools.jackson.databind.ObjectMapper;
 
+import java.net.InetSocketAddress;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 核心链路集成测试（H2 内存库 + Mock AI）：
- * 分诊 → 入库 → 分页搜索 → 详情 → 删除，以及技术栈识别/用户覆盖。
+ * 核心链路集成测试：分诊、日志关联、入库及历史管理。
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -40,6 +49,15 @@ class ExplainFlowIntegrationTest {
 
     @Autowired
     private HistoryDiagnosisMapper diagnosisMapper;
+
+    @Autowired
+    private ErrorHistoryMapper historyMapper;
+
+    @Autowired
+    private AiCallRecorder callRecorder;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     /** H2 内存库在类内共享，每个用例前清空保证计数断言独立 */
     @BeforeEach
@@ -83,17 +101,68 @@ class ExplainFlowIntegrationTest {
     }
 
     @Test
-    void aiCallLog_recordedForMockExplain() {
+    void aiCallLog_recordedForLocalExplain() {
         ExplainResponse resp = explainService.explain("java.lang.NullPointerException: null");
 
         List<AiCallLog> logs = aiCallLogMapper.selectList(null);
         assertThat(logs).hasSize(1);
         AiCallLog log = logs.get(0);
-        assertThat(log.getProvider()).isEqualTo("mock");
+        assertThat(log.getProvider()).isEqualTo("local");
         assertThat(log.getStatus()).isEqualTo("success");
         assertThat(log.getHistoryId()).isEqualTo(resp.getId());
         assertThat(log.getDurationMs()).isNotNull();
         assertThat(log.getInputExcerpt()).contains("NullPointerException");
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "fallback|plain text",
+            "fallback|{}",
+            "fallback|{\"personReport\":{\"summary\":\"  \"}}",
+            "success|{\"personReport\":{\"summary\":\"Missing user\"}}"
+    })
+    void modelReply_savesOneLinkedLog(String expectedStatus, String modelContent) throws Exception {
+        byte[] reply = objectMapper.writeValueAsBytes(Map.of(
+                "choices", List.of(Map.of("message", Map.of("content", modelContent))),
+                "usage", Map.of("prompt_tokens", 12, "completion_tokens", 5)
+        ));
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v1/chat/completions", exchange -> {
+            try (exchange) {
+                exchange.getRequestBody().readAllBytes();
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, reply.length);
+                exchange.getResponseBody().write(reply);
+            }
+        });
+        server.start();
+        try {
+            AiProperties properties = new AiProperties();
+            properties.setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/v1");
+            properties.setApiKey("test-key");
+            ErrorExplainService service = new ErrorExplainService(
+                    new OpenAiCompatibleTriageProvider(properties, objectMapper, callRecorder),
+                    historyMapper, objectMapper, callRecorder);
+            String stack = "java.lang.NullPointerException: missing user";
+            ExplainResponse response = service.explain(stack);
+
+            boolean fallback = "fallback".equals(expectedStatus);
+            assertThat(response.getReport().getPersonReport().getSummary())
+                    .isEqualTo(fallback ? stack : "Missing user");
+            assertThat(response.getReport().getHandoff().getRawError()).isEqualTo(stack);
+            assertThat(aiCallLogMapper.selectList(null)).singleElement().satisfies(entry -> {
+                assertThat(entry.getStatus()).isEqualTo(expectedStatus);
+                assertThat(entry.getHistoryId()).isEqualTo(response.getId());
+                assertThat(entry.getPromptTokens()).isEqualTo(12);
+                if (fallback) {
+                    assertThat(entry.getErrorMessage()).isNotBlank();
+                } else {
+                    assertThat(entry.getErrorMessage()).isNull();
+                }
+            });
+        } finally {
+            server.stop(0);
+        }
     }
 
     @Test

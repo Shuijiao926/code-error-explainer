@@ -31,9 +31,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 历史记录：分页/搜索/详情/删除/清空 + 项目 AI 诊断追加回填。
- * V1.5：诊断改为 history_diagnosis 子表一行一条（替代 final_diagnosis 单列 JSON 追加），
- * 对外字段 finalDiagnosis 由子表重建，保持前端契约不变。
+ * 历史记录：分页 / 搜索 / 详情 / 删除 / 清空，以及踩坑知识库检索、统计与导出。
+ * 诊断结论按条存放在 history_diagnosis 子表中，对外仍以 finalDiagnosis 字段返回。
  */
 @Service
 @RequiredArgsConstructor
@@ -75,7 +74,7 @@ public class HistoryService {
     }
 
     /**
-     * 踩坑档案知识库分页检索（V1.6，新增 /api/kb，不破坏 /api/history）。
+     * 踩坑知识库分页检索（/api/kb，与历史接口共用底层查询）。
      * keyword 同时匹配 error_type / summary / tech_stack / 回填诊断内容（history_diagnosis.content）。
      */
     public PageResult<ErrorHistory> kbPage(long page, long size, String keyword, String language,
@@ -160,8 +159,8 @@ public class HistoryService {
     }
 
     /**
-     * 踩坑知识库统计（V1.6，GET /api/kb/stats）。
-     * 数据量在当前演示规模下采用内存聚合，保证与库内数据严格一致；
+     * 踩坑知识库统计（GET /api/kb/stats）。
+     * 当前数据规模下在内存中聚合，保证统计结果与库内数据一致；
      * 命中条件复用 buildKbWrapper，口径与 /api/kb 检索一致。空库返回零值，不报错。
      */
     public KbStats stats(Boolean archived, String keyword, String language, String techStack,

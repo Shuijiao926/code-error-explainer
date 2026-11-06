@@ -20,7 +20,7 @@ public class AiCallLog {
     /** 关联 error_history.id */
     private Long historyId;
 
-    /** mock / deepseek / openai / ollama */
+    /** local / deepseek / openai / ollama */
     private String provider;
 
     /** 模型名 */

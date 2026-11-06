@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 
 /**
  * 项目 AI 最终诊断（一条一行），对应表 history_diagnosis。
- * V1.5 起替代 error_history.final_diagnosis 的单列 JSON 追加。
+ * 诊断以子表逐条保存，便于同一记录多次追加、按时间回看。
  */
 @Data
 @TableName("history_diagnosis")

@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * POST /api/explain 响应体（V1.1 双段式）。
+ * POST /api/explain 响应体：记录元信息 + 双段式分诊报告。
  */
 @Data
 @Builder

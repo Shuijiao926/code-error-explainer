@@ -9,30 +9,31 @@ import com.org.codeerrorexplainerdemo.service.ErrorExplainService;
 import java.util.List;
 
 /**
- * Mock 提供者：未配置 API Key 时启用，按语言+异常类型返回模板化双段式分诊报告
- * （人话版类比优先）。仅用于演示，非真实分析。
+ * 本地规则库提供者：未配置外部 AI 服务时启用，按语言 + 异常类型返回内置的双段式分诊报告
+ * （人话版类比优先）。用于保证离线或未配置 Key 时核心流程仍然可用。
  */
-public class MockAIService implements AIService {
+public class LocalRuleTriageProvider implements TriageReportProvider {
 
     private final AiCallRecorder recorder;
 
-    public MockAIService(AiCallRecorder recorder) {
+    public LocalRuleTriageProvider(AiCallRecorder recorder) {
         this.recorder = recorder;
     }
 
     @Override
     public AiCallOutcome explain(String stackTrace, List<String> techStack, String language) {
         long start = System.nanoTime();
-        String type = ErrorExplainService.extractErrorType(stackTrace, language);
-        PreTriageReport report;
-        if ("python".equals(language)) report = python(type, stackTrace, techStack);
-        else if ("node".equals(language)) report = node(type, stackTrace, techStack);
-        else if ("go".equals(language)) report = go(type, stackTrace, techStack);
-        else report = java(type, stackTrace, techStack);
+        String errorType = ErrorExplainService.extractErrorType(stackTrace, language);
+        PreTriageReport report = switch (language == null ? "" : language) {
+            case "python" -> reportForPython(errorType, stackTrace, techStack);
+            case "node" -> reportForNode(errorType, stackTrace, techStack);
+            case "go" -> reportForGo(errorType, stackTrace, techStack);
+            default -> reportForJava(errorType, stackTrace, techStack);
+        };
 
         AiCallLog log = new AiCallLog();
-        log.setProvider("mock");
-        log.setModel("mock");
+        log.setProvider("local");
+        log.setModel("local");
         log.setStatus("success");
         log.setDurationMs(AiCallRecorder.elapsedMs(start));
         log.setInputExcerpt(AiCallRecorder.excerpt(stackTrace));
@@ -40,9 +41,9 @@ public class MockAIService implements AIService {
         return new AiCallOutcome(report, logId);
     }
 
-    // ============ Java（V1.1 既有模板） ============
+    // ---- Java：按异常类型选择内置分诊模板 ----
 
-    private PreTriageReport java(String type, String stack, List<String> techStack) {
+    private PreTriageReport reportForJava(String type, String stack, List<String> techStack) {
         String t = type == null ? "" : type;
         if (t.contains("NullPointerException")) return npe(stack, techStack);
         if (t.contains("SQLException")) return sql(stack, techStack);
@@ -151,10 +152,10 @@ public class MockAIService implements AIService {
     private PreTriageReport genericJava(String type, String stack, List<String> techStack) {
         return PreTriageReport.builder()
                 .personReport(PersonReport.builder()
-                        .summary("检测到异常类型：" + type + "。（当前为演示模式，配置真实 AI Key 后会获得专业分诊。）")
+                        .summary("检测到异常类型：" + type + "。（当前由内置规则库分诊，配置 AI 服务后可获得更具体的分析。）")
                         .layer("具体层面需看堆栈里第一个 \"at ...\" 行。")
                         .misuse("具体可疑点需结合报错上下文判断（这是方向，不是定论）。")
-                        .nextStep("把「诊断包」发给项目 AI；或配置 AI_API_KEY 后重新提交获得专业分诊。")
+                        .nextStep("把「诊断包」发给项目 AI；或配置 AI 服务后重新提交，获得更具体的前置分诊。")
                         .build())
                 .handoff(Handoff.builder()
                         .techStack(techStack)
@@ -166,9 +167,9 @@ public class MockAIService implements AIService {
                 .build();
     }
 
-    // ============ Python ============
+    // ---- Python ----
 
-    private PreTriageReport python(String type, String stack, List<String> techStack) {
+    private PreTriageReport reportForPython(String type, String stack, List<String> techStack) {
         String t = type == null ? "" : type;
         if (t.contains("KeyError")) {
             return personAndHandoff("程序去字典/映射里取一个「没有登记」的钥匙，结果扑空了（KeyError）。",
@@ -191,16 +192,16 @@ public class MockAIService implements AIService {
                     List.of("检查下标范围是否超出 len()", "取元素前判断列表是否为空", "用切片或加边界保护"),
                     stack, techStack);
         }
-        return personAndHandoff("检测到 Python 异常类型：" + type + "。（演示模式，配真实 AI Key 后更专业。）",
+        return personAndHandoff("检测到 Python 异常类型：" + type + "。（内置规则库分诊，配置 AI 服务后更具体。）",
                 "看 Traceback 里离你代码最近的 File 那一层。",
                 "具体可疑点需结合报错上下文判断（方向，非定论）。",
                 List.of("从 Traceback 底部往上看，找属于自己代码的 File 行", "结合该行传入的数据排查"),
                 stack, techStack);
     }
 
-    // ============ Node.js ============
+    // ---- Node.js ----
 
-    private PreTriageReport node(String type, String stack, List<String> techStack) {
+    private PreTriageReport reportForNode(String type, String stack, List<String> techStack) {
         String t = type == null ? "" : type;
         if (t.contains("TypeError")) {
             return personAndHandoff("程序想对一个「不存在的东西」做操作（TypeError），比如读取 undefined 的属性。",
@@ -216,16 +217,16 @@ public class MockAIService implements AIService {
                     List.of("确认变量已声明且拼写一致", "检查是否在正确的作用域内引用", "注意块级作用域 let/const"),
                     stack, techStack);
         }
-        return personAndHandoff("检测到 Node.js 异常类型：" + type + "。（演示模式，配真实 AI Key 后更专业。）",
+        return personAndHandoff("检测到 Node.js 异常类型：" + type + "。（内置规则库分诊，配置 AI 服务后更具体。）",
                 "看堆栈里属于自己代码的第一个 at 行。",
                 "具体可疑点需结合报错上下文判断（方向，非定论）。",
                 List.of("从堆栈底部找第一个属于自己代码的 at 行", "结合该处传入的数据排查"),
                 stack, techStack);
     }
 
-    // ============ Go ============
+    // ---- Go ----
 
-    private PreTriageReport go(String type, String stack, List<String> techStack) {
+    private PreTriageReport reportForGo(String type, String stack, List<String> techStack) {
         String t = type == null ? "" : type;
         if (t.contains("nil pointer") || t.contains("invalid memory address")) {
             return personAndHandoff("程序对一个「空指针」做了操作（nil pointer dereference）。",
@@ -241,7 +242,7 @@ public class MockAIService implements AIService {
                     List.of("检查下标是否越界", "访问前判断 len()", "用 range 或加边界保护"),
                     stack, techStack);
         }
-        return personAndHandoff("检测到 Go panic：" + type + "。（演示模式，配真实 AI Key 后更专业。）",
+        return personAndHandoff("检测到 Go panic：" + type + "。（内置规则库分诊，配置 AI 服务后更具体。）",
                 "看 panic 上方 goroutine 栈里属于自己业务代码的行。",
                 "具体可疑点需结合报错上下文判断（方向，非定论）。",
                 List.of("从 panic 往上找第一个业务函数", "结合传入数据与代码排查"),
